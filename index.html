@@ -1,0 +1,4398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Chat</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --panel: rgba(12, 21, 37, 0.82);
+      --panel-strong: rgba(18, 31, 52, 0.94);
+      --panel-border: rgba(142, 195, 255, 0.16);
+      --text: #edf4ff;
+      --muted: #9aacc6;
+      --accent: #82e6c8;
+      --accent-2: #ffb86b;
+      --danger: #ff8d90;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+      --radius: 26px;
+      --scrollbar-size: 10px;
+      --scrollbar-track: transparent;
+      --scrollbar-thumb: #1f8d70;
+      --scrollbar-thumb-hover: #1f8d70;
+      --scrollbar-edge-gap: 8px;
+      --scrollbar-thumb-side-inset: 3px;
+      --scrollbar-thumb-end-inset: 2px;
+      --font-sans: "Space Grotesk", "IBM Plex Sans", "PingFang SC", "Noto Sans SC", sans-serif;
+      --font-mono: "IBM Plex Mono", "Cascadia Code", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      -webkit-text-size-adjust: 100%;
+      font-family: var(--font-sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(130, 230, 200, 0.18), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(255, 184, 107, 0.16), transparent 24%),
+        linear-gradient(135deg, #060b13 0%, #0c1730 42%, #12131f 100%);
+    }
+
+    body {
+      min-height: 100%;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(130, 230, 200, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(130, 230, 200, 0.05) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.82), transparent 88%);
+      pointer-events: none;
+    }
+
+    .sider,
+    .session-list,
+    .model-menu,
+    .messages,
+    textarea {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    .sider::-webkit-scrollbar,
+    .session-list::-webkit-scrollbar,
+    .model-menu::-webkit-scrollbar,
+    .messages::-webkit-scrollbar,
+    textarea::-webkit-scrollbar {
+      width: var(--scrollbar-size);
+      height: var(--scrollbar-size);
+    }
+
+    .sider::-webkit-scrollbar-button,
+    .session-list::-webkit-scrollbar-button,
+    .model-menu::-webkit-scrollbar-button,
+    .messages::-webkit-scrollbar-button,
+    textarea::-webkit-scrollbar-button {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+
+    .sider::-webkit-scrollbar-track,
+    .session-list::-webkit-scrollbar-track,
+    .model-menu::-webkit-scrollbar-track,
+    .messages::-webkit-scrollbar-track,
+    textarea::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+      border-top: var(--scrollbar-edge-gap) solid transparent;
+      border-bottom: var(--scrollbar-edge-gap) solid transparent;
+      border-radius: 999px;
+      background-clip: padding-box;
+    }
+
+    .sider::-webkit-scrollbar-track-piece,
+    .session-list::-webkit-scrollbar-track-piece,
+    .model-menu::-webkit-scrollbar-track-piece,
+    .messages::-webkit-scrollbar-track-piece,
+    textarea::-webkit-scrollbar-track-piece {
+      background: transparent;
+      border-radius: 999px;
+    }
+
+    .sider::-webkit-scrollbar-thumb,
+    .session-list::-webkit-scrollbar-thumb,
+    .model-menu::-webkit-scrollbar-thumb,
+    .messages::-webkit-scrollbar-thumb,
+    textarea::-webkit-scrollbar-thumb {
+      background: transparent;
+      border: var(--scrollbar-thumb-end-inset) solid transparent;
+      border-left-width: var(--scrollbar-thumb-side-inset);
+      border-right-width: var(--scrollbar-thumb-side-inset);
+      border-radius: 999px;
+      box-shadow: inset 0 0 0 999px var(--scrollbar-thumb);
+      background-clip: padding-box;
+    }
+
+    .sider::-webkit-scrollbar-thumb:hover,
+    .session-list::-webkit-scrollbar-thumb:hover,
+    .model-menu::-webkit-scrollbar-thumb:hover,
+    .messages::-webkit-scrollbar-thumb:hover,
+    textarea::-webkit-scrollbar-thumb:hover {
+      background: transparent;
+      box-shadow: inset 0 0 0 999px var(--scrollbar-thumb-hover);
+      background-clip: padding-box;
+    }
+
+    .sider::-webkit-scrollbar-corner,
+    .session-list::-webkit-scrollbar-corner,
+    .model-menu::-webkit-scrollbar-corner,
+    .messages::-webkit-scrollbar-corner,
+    textarea::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+
+    .is-custom-scrollbars .custom-native-scroll {
+      scrollbar-width: none;
+      scrollbar-color: auto;
+    }
+
+    .is-custom-scrollbars .custom-native-scroll::-webkit-scrollbar {
+      width: 0;
+      height: 0;
+    }
+
+    .is-custom-scrollbars .custom-scroll-shell {
+      position: relative;
+      width: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .is-custom-scrollbars .custom-scroll-shell[data-fill-height="true"] {
+      height: 100%;
+    }
+
+    .is-custom-scrollbars .custom-scroll-shell > .messages,
+    .is-custom-scrollbars .custom-scroll-shell > .session-list {
+      height: 100%;
+    }
+
+    .is-custom-scrollbars .custom-scroll-shell > .session-list {
+      padding-right: calc(var(--scrollbar-size) + 8px);
+    }
+
+    .is-custom-scrollbars .custom-scroll-shell > textarea {
+      display: block;
+      margin: 0;
+    }
+
+    .is-custom-scrollbars .custom-scrollbar {
+      position: absolute;
+      top: 8px;
+      right: 2px;
+      bottom: 8px;
+      width: 10px;
+      border-radius: 999px;
+      background: transparent;
+      z-index: 4;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .is-custom-scrollbars .custom-scroll-shell[data-scrollable="false"] .custom-scrollbar {
+      display: none;
+    }
+
+    .is-custom-scrollbars .custom-scrollbar-thumb {
+      position: absolute;
+      top: 0;
+      left: 2px;
+      right: 2px;
+      min-height: 34px;
+      border-radius: 999px;
+      background: #1f8d70;
+      cursor: pointer;
+    }
+
+    .is-custom-scrollbars .custom-scroll-shell.is-dragging .custom-scrollbar-thumb {
+      cursor: grabbing;
+    }
+
+    input,
+    textarea,
+    button,
+    select {
+      font: inherit;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      padding: 14px 16px;
+      color: var(--text);
+      background: rgba(4, 10, 19, 0.78);
+      outline: none;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: rgba(130, 230, 200, 0.62);
+      box-shadow: 0 0 0 4px rgba(130, 230, 200, 0.12);
+    }
+
+    textarea {
+      line-height: 1.65;
+      resize: none;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 16px;
+      padding: 12px 18px;
+      cursor: pointer;
+      color: #081319;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), #dffdf1);
+      box-shadow: 0 14px 34px rgba(130, 230, 200, 0.18);
+      transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 38px rgba(130, 230, 200, 0.24);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .app-shell {
+      position: relative;
+      z-index: 1;
+      height: 100dvh;
+      padding: 16px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 16px;
+      overflow: hidden;
+    }
+
+    .app-header,
+    .side-card,
+    .content,
+    .auth-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .app-header {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background:
+        linear-gradient(180deg, rgba(15, 29, 50, 0.94), rgba(9, 18, 32, 0.86)),
+        var(--panel);
+    }
+
+    .header-start {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sidebar-toggle {
+      display: none;
+      width: 42px;
+      min-width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.12));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: none;
+    }
+
+    .sidebar-toggle:hover:not(:disabled) {
+      transform: none;
+      box-shadow: none;
+    }
+
+    .sidebar-toggle-lines {
+      display: inline-grid;
+      gap: 4px;
+    }
+
+    .sidebar-toggle-lines span {
+      display: block;
+      width: 16px;
+      height: 2px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+
+    .header-tools {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-token {
+      max-width: min(36vw, 320px);
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--muted);
+      font-size: 0.82rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #logout-button {
+      padding: 8px 14px;
+      font-size: 0.82rem;
+      line-height: 1.2;
+    }
+
+    #send-button {
+      color: #f5fffb;
+      background: linear-gradient(135deg, #2f8f7b, #57b59a);
+      box-shadow: 0 14px 30px rgba(47, 143, 123, 0.26);
+    }
+
+    #send-button:hover:not(:disabled) {
+      box-shadow: 0 18px 36px rgba(47, 143, 123, 0.32);
+    }
+
+    .theme-toggle {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      min-width: 34px;
+      height: 34px;
+      padding: 0;
+      border-radius: 999px;
+      color: var(--text);
+      box-shadow: none;
+    }
+
+    .theme-toggle:hover:not(:disabled) {
+      box-shadow: none;
+    }
+
+    .theme-icon {
+      grid-area: 1 / 1;
+      width: 18px;
+      height: 18px;
+      opacity: 0;
+      transform: scale(0.88) rotate(-8deg);
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .theme-icon svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    :root:not([data-theme="light"]) .theme-icon-moon,
+    :root[data-theme="light"] .theme-icon-sun {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--accent);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 34px;
+      height: 1px;
+      background: currentColor;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .side-card p,
+    .auth-card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+
+    .workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+      gap: 16px;
+      overflow: hidden;
+    }
+
+    .sider {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: 16px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .side-card {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .prompt-card {
+      align-self: start;
+      width: 100%;
+      justify-self: stretch;
+    }
+
+    .side-card h2,
+    .content h2,
+    .auth-card h2 {
+      margin: 0;
+      font-size: 1.08rem;
+      letter-spacing: 0.01em;
+    }
+
+    .kv {
+      display: grid;
+      gap: 8px;
+    }
+
+    .kv-item {
+      padding: 10px 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .kv-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .kv-item strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 0.95rem;
+      overflow-wrap: anywhere;
+    }
+
+    .session-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .session-head-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .session-head-action {
+      width: auto;
+      padding: 9px 14px;
+      border-radius: 14px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      box-shadow: none;
+    }
+
+    .session-head .session-add {
+      display: none;
+    }
+
+    .session-add {
+      padding: 9px 14px;
+      border-radius: 14px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      box-shadow: none;
+    }
+
+    .mobile-session-add {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 9px 14px;
+      border-radius: 14px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      box-shadow: none;
+      flex: none;
+      width: auto;
+      min-width: 92px;
+      white-space: nowrap;
+    }
+
+    .sessions-card {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      align-content: stretch;
+      overflow: hidden;
+    }
+
+    .sider-backdrop {
+      display: none;
+    }
+
+    .session-list {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      grid-auto-rows: max-content;
+      min-height: 0;
+      max-height: none;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .session-entry {
+      position: relative;
+    }
+
+    .session-entry.is-menu-open {
+      z-index: 8;
+    }
+
+    .session-item {
+      width: 100%;
+      padding: 12px 14px;
+      padding-right: 56px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      text-align: left;
+      box-shadow: none;
+    }
+
+    .session-item:hover:not(:disabled),
+    .session-item:focus-visible {
+      transform: none;
+      box-shadow: none;
+      background: rgba(255, 255, 255, 0.06);
+      outline: none;
+    }
+
+    .session-item.is-active {
+      border-color: rgba(130, 230, 200, 0.24);
+      background: rgba(130, 230, 200, 0.12);
+    }
+
+    .session-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.95rem;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .session-meta {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+
+    .session-menu-wrap {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 3;
+    }
+
+    .session-menu-trigger {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      min-width: 34px;
+      height: 34px;
+      padding: 0;
+      border-radius: 12px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+    }
+
+    .session-menu-trigger:hover:not(:disabled),
+    .session-menu-trigger:focus-visible {
+      transform: none;
+      box-shadow: none;
+      background: rgba(255, 255, 255, 0.08);
+      outline: none;
+    }
+
+    .session-menu-dots {
+      display: inline-block;
+      font-size: 1.25rem;
+      line-height: 1;
+      transform: translateY(-1px);
+    }
+
+    .session-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 148px;
+      padding: 8px;
+      display: grid;
+      gap: 4px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(15, 28, 47, 0.98);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(18px);
+    }
+
+    .session-menu[hidden] {
+      display: none;
+    }
+
+    .session-menu button {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-align: left;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .session-menu button:hover:not(:disabled),
+    .session-menu button:focus-visible {
+      transform: none;
+      box-shadow: none;
+      background: rgba(255, 255, 255, 0.08);
+      outline: none;
+    }
+
+    .session-menu button.session-menu-danger {
+      color: var(--danger);
+    }
+
+    .session-empty {
+      padding: 14px;
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    .content {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 16px;
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .field {
+      display: grid;
+      gap: 10px;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .model-bar {
+      position: relative;
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 2px 4px 0;
+    }
+
+    .model-picker {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-start;
+      min-width: 0;
+      flex: 1 1 auto;
+      max-width: 100%;
+    }
+
+    .model-usage {
+      flex: none;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.4;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .model-usage:empty {
+      display: none;
+    }
+
+    .model-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      box-shadow: none;
+    }
+
+    .model-trigger.is-placeholder {
+      color: var(--muted);
+    }
+
+    .model-trigger.is-disabled {
+      opacity: 0.52;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .model-trigger:hover {
+      transform: none;
+      box-shadow: none;
+    }
+
+    .model-trigger-value {
+      max-width: min(56vw, 420px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: clamp(1.18rem, 1.9vw, 1.52rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    .model-trigger-icon {
+      flex: none;
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      color: rgba(237, 244, 255, 0.9);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+    }
+
+    .model-trigger-icon svg {
+      display: block;
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.1;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .model-picker[data-open="true"] .model-trigger-icon {
+      transform: rotate(180deg);
+    }
+
+    .model-trigger:hover .model-trigger-icon,
+    .model-trigger:focus-visible .model-trigger-icon {
+      background: rgba(130, 230, 200, 0.12);
+      border-color: rgba(130, 230, 200, 0.2);
+    }
+
+    .model-menu {
+      position: absolute;
+      top: calc(100% + 14px);
+      left: 0;
+      width: min(420px, calc(100vw - 72px));
+      max-height: min(62vh, 560px);
+      overflow-y: auto;
+      padding: 10px;
+      border-radius: 18px;
+      border: 1px solid rgba(17, 24, 39, 0.08);
+      background: rgba(248, 249, 252, 0.98);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(14px);
+    }
+
+    .model-menu[hidden] {
+      display: none;
+    }
+
+    .model-option,
+    .model-option-empty {
+      padding: 14px 16px;
+      border-radius: 12px;
+    }
+
+    .model-option {
+      display: grid;
+      gap: 6px;
+      background: transparent;
+      color: #101a2c;
+      text-align: left;
+      cursor: pointer;
+      transition: background-color 140ms ease;
+    }
+
+    .model-option:hover,
+    .model-option:focus-visible {
+      background: rgba(16, 26, 44, 0.08);
+      transform: none;
+      box-shadow: none;
+      outline: none;
+    }
+
+    .model-option.is-selected {
+      background: rgba(28, 36, 52, 0.12);
+    }
+
+    .model-option-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .model-option-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .model-option-check {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: #2b3240;
+      color: #ffffff;
+      font-size: 0.74rem;
+      flex: none;
+      visibility: hidden;
+    }
+
+    .model-option.is-selected .model-option-check {
+      visibility: visible;
+    }
+
+    .model-option-empty {
+      color: #657089;
+      font-size: 0.96rem;
+      line-height: 1.5;
+    }
+
+    .chat-stage {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: 16px;
+      overflow: hidden;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .button-secondary {
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.12));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: none;
+    }
+
+    .status {
+      min-height: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .status:empty {
+      display: none;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .status.success {
+      color: var(--accent);
+    }
+
+    .messages {
+      padding: 18px;
+      border-radius: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(180deg, rgba(8, 15, 28, 0.78), rgba(14, 23, 37, 0.72));
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .message {
+      max-width: min(100%, 760px);
+      padding: 16px 18px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      line-height: 1.74;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, rgba(130, 230, 200, 0.12), rgba(130, 230, 200, 0.18));
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .message.system {
+      align-self: center;
+      font-size: 0.92rem;
+      color: var(--muted);
+      background: rgba(255, 184, 107, 0.08);
+      text-align: center;
+    }
+
+    .message-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .message-meta {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+
+    .message-body {
+      display: grid;
+      gap: 12px;
+    }
+
+    .loading-dots {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 18px;
+    }
+
+    .loading-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(237, 244, 255, 0.88);
+      animation: loading-dot-jump 0.9s ease-in-out infinite;
+    }
+
+    .loading-dot:nth-child(2) {
+      animation-delay: 0.12s;
+    }
+
+    .loading-dot:nth-child(3) {
+      animation-delay: 0.24s;
+    }
+
+    @keyframes loading-dot-jump {
+      0%, 80%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+      }
+
+      40% {
+        transform: translateY(-5px);
+        opacity: 1;
+      }
+    }
+
+    .message-images {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 160px));
+      gap: 10px;
+    }
+
+    .message-image-link {
+      display: block;
+    }
+
+    .message-image {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .empty {
+      flex: 1;
+      display: grid;
+      place-items: center;
+      min-height: 100%;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.7;
+    }
+
+    .composer {
+      padding: 14px 18px;
+      border-radius: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(7, 15, 29, 0.86);
+      display: grid;
+      gap: 12px;
+    }
+
+    .composer-box {
+      display: grid;
+      gap: 12px;
+    }
+
+    .composer-input-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .composer-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .attachment-chip {
+      position: relative;
+      width: 88px;
+      height: 88px;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+      flex: 0 0 auto;
+    }
+
+    .attachment-chip img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .attachment-chip button {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 24px;
+      min-width: 24px;
+      height: 24px;
+      padding: 0;
+      border-radius: 999px;
+      background: rgba(7, 15, 29, 0.84);
+      box-shadow: none;
+      font-size: 0.9rem;
+      line-height: 1;
+    }
+
+    .attachment-chip button:hover:not(:disabled) {
+      transform: none;
+      box-shadow: none;
+    }
+
+    .attachment-chip-meta {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      padding: 16px 8px 8px;
+      background: linear-gradient(180deg, transparent, rgba(7, 15, 29, 0.88));
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.66rem;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .composer textarea {
+      display: block;
+      min-height: 0;
+      max-height: none;
+      min-width: 0;
+      margin: 0;
+      padding-right: 16px;
+      padding-top: 8px;
+      padding-bottom: 8px;
+      overflow-y: hidden;
+      transition: height 140ms ease;
+    }
+
+    .composer-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      align-self: center;
+      flex: none;
+    }
+
+    .composer-actions button {
+      position: static;
+      min-width: 84px;
+      min-height: 50px;
+      height: 50px;
+      padding: 8px 16px;
+    }
+
+    .auth-shell {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(3, 8, 15, 0.72);
+      backdrop-filter: blur(14px);
+      pointer-events: none;
+    }
+
+    .auth-shell[hidden] {
+      display: none !important;
+    }
+
+    .auth-card {
+      width: min(480px, 100%);
+      background: linear-gradient(180deg, rgba(12, 23, 40, 0.96), rgba(9, 18, 32, 0.92));
+      display: grid;
+      gap: 14px;
+      padding: 26px;
+      position: relative;
+      overflow: hidden;
+      pointer-events: auto;
+    }
+
+    .auth-card::before {
+      content: "";
+      position: absolute;
+      inset: auto -44px -60px auto;
+      width: 180px;
+      height: 180px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(130, 230, 200, 0.3), transparent 70%);
+      pointer-events: none;
+    }
+
+    .auth-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background:
+        linear-gradient(135deg, rgba(130, 230, 200, 0.12), transparent 26%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 32%);
+      pointer-events: none;
+    }
+
+    .auth-head,
+    .auth-field,
+    .auth-actions,
+    .auth-status {
+      position: relative;
+      z-index: 1;
+    }
+
+    .auth-head {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      gap: 16px;
+    }
+
+    .auth-mark {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(130, 230, 200, 0.96), rgba(31, 141, 112, 0.9));
+      box-shadow: 0 18px 34px rgba(31, 141, 112, 0.24);
+      overflow: hidden;
+    }
+
+    .auth-mark::before {
+      content: "";
+      position: absolute;
+      top: 13px;
+      left: 14px;
+      width: 18px;
+      height: 18px;
+      border: 3px solid rgba(7, 21, 28, 0.86);
+      border-radius: 999px;
+    }
+
+    .auth-mark::after {
+      content: "";
+      position: absolute;
+      top: 26px;
+      right: 12px;
+      width: 22px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(7, 21, 28, 0.86);
+      box-shadow: -7px 10px 0 -1px rgba(7, 21, 28, 0.86);
+      transform: rotate(-16deg);
+      transform-origin: center;
+    }
+
+    .auth-copy {
+      min-width: 0;
+    }
+
+    .auth-card h2 {
+      margin-top: 0;
+      font-size: clamp(1.85rem, 5vw, 2.45rem);
+      line-height: 1.02;
+      letter-spacing: -0.05em;
+    }
+
+    .auth-copy p {
+      margin-top: 10px;
+      max-width: 30ch;
+      font-size: 0.98rem;
+    }
+
+    .auth-field {
+      display: grid;
+      gap: 10px;
+    }
+
+    .auth-field input {
+      min-height: 62px;
+      padding-inline: 20px;
+      border-radius: 22px;
+      border-color: rgba(255, 255, 255, 0.1);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+        rgba(4, 10, 19, 0.8);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      font-size: 1.02rem;
+    }
+
+    .auth-field input::placeholder {
+      color: rgba(237, 244, 255, 0.48);
+    }
+
+    .auth-actions {
+      justify-content: stretch;
+    }
+
+    .auth-actions #unlock-button {
+      width: 100%;
+      min-height: 56px;
+      padding-inline: 24px;
+      border-radius: 20px;
+      font-size: 1rem;
+      letter-spacing: -0.01em;
+      background: linear-gradient(135deg, #7eddbd, #dffcf0);
+      box-shadow: 0 18px 36px rgba(31, 141, 112, 0.22);
+    }
+
+    .auth-status {
+      min-height: 24px;
+      margin-top: -2px;
+      font-size: 0.92rem;
+    }
+
+    .sider .field textarea {
+      min-height: 180px;
+      max-height: 320px;
+    }
+
+    .locked .app-header,
+    .locked .workspace {
+      filter: blur(8px);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .locked .app-header {
+      position: relative;
+      z-index: 11;
+      pointer-events: auto;
+    }
+
+    .locked .header-start,
+    .locked #token-value,
+    .locked #logout-button {
+      pointer-events: none;
+    }
+
+    .locked #theme-toggle {
+      pointer-events: auto;
+    }
+
+    .mono {
+      font-family: var(--font-mono);
+      letter-spacing: 0;
+    }
+
+    @media (max-width: 960px) {
+      .workspace {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(240px, 38vh) minmax(0, 1fr);
+      }
+
+      .sider {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: none;
+        align-content: start;
+      }
+
+      .sessions-card,
+      .prompt-card {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-aspect-ratio: 9/8) {
+      .app-shell {
+        padding:
+          calc(12px + env(safe-area-inset-top))
+          calc(12px + env(safe-area-inset-right))
+          calc(12px + env(safe-area-inset-bottom))
+          calc(12px + env(safe-area-inset-left));
+        gap: 12px;
+      }
+
+      .app-header,
+      .side-card,
+      .content,
+      .auth-card,
+      .composer,
+      .messages {
+        padding: 16px;
+      }
+
+      .workspace {
+        position: relative;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+        gap: 12px;
+      }
+
+      .app-header {
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .header-start {
+        flex: 0 1 auto;
+        min-width: 0;
+        gap: 10px;
+      }
+
+      .sidebar-toggle {
+        display: inline-grid;
+        place-items: center;
+        color: var(--text);
+      }
+
+      .app-header h1 {
+        width: auto;
+        min-width: 0;
+        white-space: nowrap;
+        font-size: clamp(1.12rem, 5vw, 1.5rem);
+      }
+
+      .button-row,
+      .composer {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .composer-input-shell {
+        display: grid;
+        gap: 12px;
+      }
+
+      .auth-head {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+      }
+
+      .auth-mark {
+        width: 50px;
+        height: 50px;
+      }
+
+      .auth-card h2 {
+        margin-top: 10px;
+      }
+
+      .auth-copy p {
+        max-width: none;
+      }
+
+      .sider {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+        align-items: stretch;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 12;
+        width: min(88vw, 340px);
+        height: 100%;
+        padding-right: 6px;
+        transform: translateX(calc(-100% - 18px));
+        opacity: 0;
+        pointer-events: none;
+        transition: transform 180ms ease, opacity 180ms ease;
+      }
+
+      body.sidebar-open .sider {
+        transform: translateX(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .sider-backdrop {
+        display: block;
+        position: absolute;
+        inset: 0;
+        z-index: 11;
+        border: 0;
+        padding: 0;
+        background: rgba(3, 8, 15, 0.5);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 180ms ease;
+      }
+
+      body.sidebar-open .sider-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .sider {
+        gap: 12px;
+      }
+
+      button {
+        width: 100%;
+      }
+
+      .app-header button,
+      .composer-box button {
+        width: auto;
+      }
+
+      .header-tools {
+        width: auto;
+        flex: 1 1 auto;
+        min-width: 0;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .header-token {
+        flex: 0 1 auto;
+        width: auto;
+        max-width: min(30vw, 156px);
+      }
+
+      .model-bar {
+        width: 100%;
+        padding-inline: 0;
+        gap: 10px;
+      }
+
+      .session-head .session-add {
+        display: none;
+      }
+
+      .session-head-actions button {
+        width: auto;
+      }
+
+      .mobile-session-add {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 84px;
+      }
+
+      .model-trigger-value {
+        max-width: 100%;
+        font-size: 1.08rem;
+      }
+
+      .model-usage {
+        max-width: 38vw;
+        font-size: 0.76rem;
+      }
+
+      .model-menu {
+        width: min(420px, calc(100vw - 32px));
+        max-height: min(52vh, 360px);
+      }
+
+      .session-head,
+      .message-head {
+        flex-wrap: wrap;
+      }
+
+      .session-list {
+        max-height: none;
+      }
+
+      .sider .field textarea {
+        min-height: 120px;
+        max-height: 24vh;
+      }
+
+      .chat-stage {
+        gap: 12px;
+      }
+
+      .message {
+        padding: 14px 15px;
+      }
+
+      .message-images {
+        grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+      }
+
+      .attachment-chip {
+        width: 72px;
+        height: 72px;
+        border-radius: 16px;
+      }
+
+      .composer textarea {
+        min-height: 0;
+        padding-right: 16px;
+        padding-bottom: 14px;
+      }
+
+      .composer-actions {
+        position: static;
+        justify-content: stretch;
+        gap: 8px;
+        transform: none;
+      }
+
+      .composer-actions button {
+        flex: 1 1 0;
+        min-width: 0;
+        padding-inline: 12px;
+      }
+
+      .auth-shell {
+        padding:
+          calc(16px + env(safe-area-inset-top))
+          calc(16px + env(safe-area-inset-right))
+          calc(16px + env(safe-area-inset-bottom))
+          calc(16px + env(safe-area-inset-left));
+      }
+    }
+
+    @media (max-aspect-ratio: 9/8) and (max-width: 420px) {
+      .app-shell {
+        gap: 10px;
+      }
+
+      .app-header,
+      .side-card,
+      .content,
+      .auth-card,
+      .composer,
+      .messages {
+        padding: 14px;
+      }
+
+      .workspace {
+        gap: 10px;
+      }
+
+      .header-token {
+        padding: 7px 10px;
+        font-size: 0.76rem;
+        max-width: min(26vw, 124px);
+      }
+
+      #logout-button {
+        padding: 7px 12px;
+        font-size: 0.76rem;
+      }
+
+      .model-trigger-value {
+        max-width: 100%;
+        font-size: 1rem;
+      }
+
+      .mobile-session-add {
+        padding-inline: 12px;
+        font-size: 0.82rem;
+        min-width: 76px;
+      }
+
+      .model-usage {
+        max-width: 34vw;
+        font-size: 0.72rem;
+      }
+
+      .auth-card {
+        padding: 22px 18px;
+      }
+
+      .auth-card h2 {
+        font-size: clamp(1.56rem, 7vw, 2rem);
+      }
+
+      .auth-mark {
+        width: 46px;
+        height: 46px;
+        border-radius: 15px;
+      }
+
+      .auth-mark::before {
+        top: 11px;
+        left: 11px;
+        width: 16px;
+        height: 16px;
+      }
+
+      .auth-mark::after {
+        top: 22px;
+        right: 10px;
+        width: 19px;
+      }
+
+      .model-menu {
+        width: calc(100vw - 24px);
+        top: calc(100% + 10px);
+      }
+
+      .session-list {
+        max-height: 30vh;
+      }
+
+      .sider .field textarea {
+        min-height: 108px;
+        max-height: 22vh;
+      }
+
+      .message {
+        padding: 13px 14px;
+      }
+
+      .message-images {
+        grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+      }
+
+      .attachment-chip {
+        width: 64px;
+        height: 64px;
+      }
+
+      .composer textarea {
+        padding-bottom: 14px;
+      }
+
+      .composer-actions {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body class="locked">
+  <div class="auth-shell" id="auth-shell">
+    <section class="auth-card">
+      <div class="auth-head">
+        <div class="auth-mark" aria-hidden="true"></div>
+        <div class="auth-copy">
+          <h2>输入 API Key</h2>
+          <p>校验通过后即可进入聊天界面，Key 仅保存在当前浏览器本地。</p>
+        </div>
+      </div>
+      <div class="field auth-field">
+        <input id="api-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="sk-..." aria-label="API Key" />
+      </div>
+      <div class="button-row auth-actions">
+        <button id="unlock-button">登录</button>
+      </div>
+      <div class="status auth-status" id="auth-status"></div>
+    </section>
+  </div>
+
+  <main class="app-shell">
+    <header class="app-header">
+      <div class="header-start">
+        <button
+          id="sidebar-toggle"
+          class="sidebar-toggle button-secondary"
+          type="button"
+          aria-label="打开侧边栏"
+          aria-controls="app-sider"
+          aria-expanded="false"
+        >
+          <span class="sidebar-toggle-lines" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+        </button>
+        <h1>AI Chat</h1>
+      </div>
+      <div class="header-tools">
+        <button
+          id="theme-toggle"
+          class="theme-toggle button-secondary"
+          type="button"
+          aria-label="切换到浅色模式"
+          aria-pressed="false"
+          title="切换到浅色模式"
+        >
+          <span class="theme-icon theme-icon-sun" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <circle cx="12" cy="12" r="4.25"></circle>
+              <path d="M12 2.75v2.5M12 18.75v2.5M4.93 4.93l1.77 1.77M17.3 17.3l1.77 1.77M2.75 12h2.5M18.75 12h2.5M4.93 19.07l1.77-1.77M17.3 6.7l1.77-1.77"></path>
+            </svg>
+          </span>
+          <span class="theme-icon theme-icon-moon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M20.2 14.6A8.8 8.8 0 0 1 9.4 3.8a8.8 8.8 0 1 0 10.8 10.8Z"></path>
+            </svg>
+          </span>
+        </button>
+        <div class="header-token mono" id="token-value" title="当前 Token">未验证</div>
+        <button id="logout-button" class="button-secondary" disabled>退出</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="sider" id="app-sider">
+        <section class="side-card sessions-card">
+          <div class="session-head">
+            <h2>会话</h2>
+            <div class="session-head-actions">
+              <button
+                id="clear-sessions-button"
+                class="button-secondary session-head-action"
+                type="button"
+                title="清空全部会话"
+                disabled
+              >清空全部</button>
+              <button id="new-session-button" class="button-secondary session-add session-head-action" disabled>新会话</button>
+            </div>
+          </div>
+          <div class="session-list" id="session-list">
+            <div class="session-empty" id="session-empty">暂无历史会话</div>
+          </div>
+        </section>
+
+        <section class="side-card prompt-card">
+          <h2>系统提示词</h2>
+          <div class="field">
+            <textarea id="system-prompt-input" placeholder="可选。第一次请求或重置会话后会随请求一起发送。">你是一个准确、直接、简洁的中文助手。</textarea>
+          </div>
+        </section>
+      </aside>
+      <button
+        id="sider-backdrop"
+        class="sider-backdrop"
+        type="button"
+        aria-label="关闭侧边栏"
+      ></button>
+
+      <section class="content">
+        <div class="model-bar">
+          <div class="model-picker" id="model-picker" data-open="false">
+            <div
+              id="model-trigger"
+              class="model-trigger is-placeholder"
+              role="button"
+              tabindex="0"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="model-menu"
+            >
+              <span id="model-trigger-value" class="model-trigger-value">校验 Key 后选择模型</span>
+              <span class="model-trigger-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16" focusable="false">
+                  <path d="M3.5 6 8 10.5 12.5 6" />
+                </svg>
+              </span>
+            </div>
+            <div id="model-menu" class="model-menu" role="listbox" hidden></div>
+          </div>
+          <div class="model-usage mono" id="model-usage" title=""></div>
+          <button id="mobile-new-session-button" class="button-secondary mobile-session-add" disabled>新会话</button>
+        </div>
+
+          <div class="chat-stage">
+            <div class="messages" id="messages">
+              <div class="empty" id="empty-state" aria-hidden="true"></div>
+            </div>
+
+          <div class="composer">
+            <div class="field">
+              <div class="composer-box">
+                <input id="image-input" type="file" accept="image/*" multiple hidden />
+                <div class="composer-attachments" id="composer-attachments" hidden></div>
+                <div class="composer-input-shell">
+                  <textarea
+                    id="message-input"
+                    rows="1"
+                    aria-label="发送消息"
+                    placeholder="请输入消息，或直接粘贴图片。按 Enter 发送，Shift+Enter 换行。"
+                    data-placeholder-desktop="请输入消息，或直接粘贴图片。按 Enter 发送，Shift+Enter 换行。"
+                    data-placeholder-mobile="请输入消息。"
+                  ></textarea>
+                  <div class="composer-actions">
+                    <button id="image-button" type="button" class="button-secondary" disabled>图片</button>
+                    <button id="send-button" disabled>发送</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="status" id="composer-status" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const API_BASE = window.location.origin;
+    const STORAGE_KEY = "sub2api-chat-session-api-key";
+    const SESSIONS_STORAGE_KEY = "sub2api-chat-history";
+    const LAST_MODEL_STORAGE_KEY = "sub2api-chat-last-model";
+    const THEME_STORAGE_KEY = "sub2api-chat-theme";
+    const DEFAULT_SYSTEM_PROMPT = "你是一个准确、直接、简洁的中文助手。";
+    const MAX_IMAGE_ATTACHMENTS = 4;
+
+    const refs = {
+      root: document.documentElement,
+      body: document.body,
+      authShell: document.getElementById("auth-shell"),
+      apiKeyInput: document.getElementById("api-key-input"),
+      unlockButton: document.getElementById("unlock-button"),
+      authStatus: document.getElementById("auth-status"),
+      sidebarToggle: document.getElementById("sidebar-toggle"),
+      themeToggle: document.getElementById("theme-toggle"),
+      siderBackdrop: document.getElementById("sider-backdrop"),
+      newSessionButton: document.getElementById("new-session-button"),
+      clearSessionsButton: document.getElementById("clear-sessions-button"),
+      sessionList: document.getElementById("session-list"),
+      sessionEmpty: document.getElementById("session-empty"),
+      tokenValue: document.getElementById("token-value"),
+      modelPicker: document.getElementById("model-picker"),
+      modelTrigger: document.getElementById("model-trigger"),
+      modelTriggerValue: document.getElementById("model-trigger-value"),
+      modelMenu: document.getElementById("model-menu"),
+      modelUsage: document.getElementById("model-usage"),
+      mobileNewSessionButton: document.getElementById("mobile-new-session-button"),
+      systemPromptInput: document.getElementById("system-prompt-input"),
+      imageInput: document.getElementById("image-input"),
+      imageButton: document.getElementById("image-button"),
+      composerAttachments: document.getElementById("composer-attachments"),
+      messageInput: document.getElementById("message-input"),
+      sendButton: document.getElementById("send-button"),
+      logoutButton: document.getElementById("logout-button"),
+      composerStatus: document.getElementById("composer-status"),
+      messages: document.getElementById("messages"),
+      emptyState: document.getElementById("empty-state")
+    };
+
+    const state = {
+      apiKey: "",
+      models: [],
+      selectedModel: "",
+      sessions: [],
+      currentSessionId: "",
+      conversation: [],
+      lastTokenUsageText: "",
+      openSessionMenuId: "",
+      pendingAttachments: [],
+      busy: false,
+      unlocked: false
+    };
+
+    const customScrollbarControllers = [];
+    let customScrollbarSyncFrame = 0;
+
+    const restoredSessionState = getStoredSessionState();
+    state.sessions = restoredSessionState.sessions;
+    state.currentSessionId = restoredSessionState.currentSessionId;
+
+    function shouldUseCustomScrollbars() {
+      const userAgent = globalThis.navigator?.userAgent || "";
+      return /(firefox|chrome|chromium|edg|crios)/i.test(userAgent);
+    }
+
+    function scheduleCustomScrollbarSync() {
+      if (!customScrollbarControllers.length || customScrollbarSyncFrame) {
+        return;
+      }
+
+      customScrollbarSyncFrame = globalThis.requestAnimationFrame(() => {
+        customScrollbarSyncFrame = 0;
+        customScrollbarControllers.forEach((controller) => {
+          syncCustomScrollbar(controller);
+        });
+      });
+    }
+
+    function syncCustomScrollbar(controller) {
+      if (!controller) {
+        return;
+      }
+
+      const { element, shell, track, thumb } = controller;
+      const scrollHeight = element.scrollHeight;
+      const clientHeight = element.clientHeight;
+      const maxScrollTop = Math.max(scrollHeight - clientHeight, 0);
+      const isScrollable = maxScrollTop > 1 && element.dataset.hideCustomScrollbar !== "true";
+
+      shell.dataset.scrollable = String(isScrollable);
+
+      if (!isScrollable) {
+        controller.maxScrollTop = 0;
+        controller.maxThumbOffset = 0;
+        controller.thumbOffset = 0;
+        thumb.style.height = "0px";
+        thumb.style.transform = "translateY(0)";
+        return;
+      }
+
+      const trackHeight = track.clientHeight;
+      if (!trackHeight) {
+        return;
+      }
+
+      const thumbHeight = Math.min(trackHeight, Math.max((clientHeight / scrollHeight) * trackHeight, 34));
+      const maxThumbOffset = Math.max(trackHeight - thumbHeight, 0);
+      const thumbOffset = maxScrollTop
+        ? (element.scrollTop / maxScrollTop) * maxThumbOffset
+        : 0;
+
+      controller.maxScrollTop = maxScrollTop;
+      controller.maxThumbOffset = maxThumbOffset;
+      controller.thumbOffset = thumbOffset;
+
+      thumb.style.height = `${thumbHeight}px`;
+      thumb.style.transform = `translateY(${thumbOffset}px)`;
+    }
+
+    function enhanceCustomScrollbar(element, options = {}) {
+      if (!shouldUseCustomScrollbars() || !element || element.dataset.customScrollbarEnhanced === "true") {
+        return null;
+      }
+
+      const shell = document.createElement("div");
+      shell.className = "custom-scroll-shell";
+      shell.dataset.scrollable = "false";
+      shell.dataset.fillHeight = options.fillHeight ? "true" : "false";
+      shell.style.borderRadius = globalThis.getComputedStyle(element).borderRadius;
+
+      if (options.fillHeight) {
+        shell.style.height = "100%";
+      }
+
+      element.parentNode.insertBefore(shell, element);
+      shell.appendChild(element);
+      element.classList.add("custom-native-scroll");
+      element.dataset.customScrollbarEnhanced = "true";
+
+      const track = document.createElement("div");
+      track.className = "custom-scrollbar";
+      track.setAttribute("aria-hidden", "true");
+
+      const thumb = document.createElement("div");
+      thumb.className = "custom-scrollbar-thumb";
+      track.appendChild(thumb);
+      shell.appendChild(track);
+
+      const controller = {
+        element,
+        shell,
+        track,
+        thumb,
+        maxScrollTop: 0,
+        maxThumbOffset: 0,
+        thumbOffset: 0,
+        draggingPointerId: null,
+        dragStartY: 0,
+        dragStartOffset: 0
+      };
+
+      const stopDragging = (event) => {
+        if (controller.draggingPointerId !== event.pointerId) {
+          return;
+        }
+
+        controller.draggingPointerId = null;
+        shell.classList.remove("is-dragging");
+
+        if (thumb.hasPointerCapture(event.pointerId)) {
+          thumb.releasePointerCapture(event.pointerId);
+        }
+      };
+
+      element.addEventListener("scroll", () => {
+        syncCustomScrollbar(controller);
+      });
+
+      if (element.tagName === "TEXTAREA") {
+        element.addEventListener("input", scheduleCustomScrollbarSync);
+      } else if (typeof MutationObserver === "function") {
+        const observer = new MutationObserver(scheduleCustomScrollbarSync);
+        observer.observe(element, {
+          childList: true,
+          subtree: true,
+          characterData: true
+        });
+        controller.observer = observer;
+      }
+
+      if (typeof ResizeObserver === "function") {
+        const observer = new ResizeObserver(scheduleCustomScrollbarSync);
+        observer.observe(element);
+        observer.observe(shell);
+        controller.resizeObserver = observer;
+      }
+
+      track.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || event.target === thumb || !controller.maxScrollTop) {
+          return;
+        }
+
+        const rect = track.getBoundingClientRect();
+        const targetOffset = Math.min(
+          Math.max(event.clientY - rect.top - thumb.offsetHeight / 2, 0),
+          controller.maxThumbOffset
+        );
+        element.scrollTop = controller.maxThumbOffset
+          ? (targetOffset / controller.maxThumbOffset) * controller.maxScrollTop
+          : 0;
+        syncCustomScrollbar(controller);
+        event.preventDefault();
+      });
+
+      thumb.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) {
+          return;
+        }
+
+        controller.draggingPointerId = event.pointerId;
+        controller.dragStartY = event.clientY;
+        controller.dragStartOffset = controller.thumbOffset;
+        shell.classList.add("is-dragging");
+        thumb.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      });
+
+      thumb.addEventListener("pointermove", (event) => {
+        if (controller.draggingPointerId !== event.pointerId || !controller.maxScrollTop) {
+          return;
+        }
+
+        const deltaY = event.clientY - controller.dragStartY;
+        const nextOffset = Math.min(
+          Math.max(controller.dragStartOffset + deltaY, 0),
+          controller.maxThumbOffset
+        );
+
+        element.scrollTop = controller.maxThumbOffset
+          ? (nextOffset / controller.maxThumbOffset) * controller.maxScrollTop
+          : 0;
+        syncCustomScrollbar(controller);
+      });
+
+      thumb.addEventListener("pointerup", stopDragging);
+      thumb.addEventListener("pointercancel", stopDragging);
+
+      customScrollbarControllers.push(controller);
+      syncCustomScrollbar(controller);
+      return controller;
+    }
+
+    function setupCustomScrollbars() {
+      if (!shouldUseCustomScrollbars()) {
+        return;
+      }
+
+      refs.root.classList.add("is-custom-scrollbars");
+      enhanceCustomScrollbar(refs.sessionList, { fillHeight: true });
+      enhanceCustomScrollbar(refs.messages, { fillHeight: true });
+      enhanceCustomScrollbar(refs.systemPromptInput);
+      enhanceCustomScrollbar(refs.messageInput);
+      scheduleCustomScrollbarSync();
+    }
+
+    function getMessageInputHeightMetrics() {
+      const style = globalThis.getComputedStyle(refs.messageInput);
+      const fontSize = parseFloat(style.fontSize) || 16;
+      const lineHeight = parseFloat(style.lineHeight) || fontSize * 1.65;
+      const paddingTop = parseFloat(style.paddingTop) || 0;
+      const paddingBottom = parseFloat(style.paddingBottom) || 0;
+      const borderTop = parseFloat(style.borderTopWidth) || 0;
+      const borderBottom = parseFloat(style.borderBottomWidth) || 0;
+      const frameHeight = paddingTop + paddingBottom + borderTop + borderBottom;
+      const collapsedHeight = 50;
+
+      return {
+        collapsedHeight,
+        expandedHeight: Math.max(Math.ceil(lineHeight * 5 + frameHeight), collapsedHeight)
+      };
+    }
+
+    function syncMessageInputHeight(options = {}) {
+      const { collapse = refs.messageInput !== document.activeElement } = options;
+      const { collapsedHeight, expandedHeight } = getMessageInputHeightMetrics();
+      const textarea = refs.messageInput;
+      const hasContent = Boolean(textarea.value);
+
+      textarea.style.height = "auto";
+
+      if (collapse || !hasContent) {
+        textarea.style.height = `${collapsedHeight}px`;
+        textarea.style.overflowY = "hidden";
+        textarea.dataset.hideCustomScrollbar = "true";
+        textarea.scrollTop = textarea.scrollHeight;
+        scheduleCustomScrollbarSync();
+        return;
+      }
+
+      const nextHeight = Math.min(Math.max(textarea.scrollHeight, collapsedHeight), expandedHeight);
+      const shouldScroll = textarea.scrollHeight > expandedHeight + 1;
+
+      textarea.style.height = `${nextHeight}px`;
+      textarea.style.overflowY = shouldScroll ? "auto" : "hidden";
+      textarea.dataset.hideCustomScrollbar = shouldScroll ? "false" : "true";
+      scheduleCustomScrollbarSync();
+    }
+
+    function maskApiKey(apiKey) {
+      if (!apiKey) {
+        return "未验证";
+      }
+
+      if (apiKey.length <= 10) {
+        return `${apiKey.slice(0, 2)}••••`;
+      }
+
+      return `${apiKey.slice(0, 6)}••••${apiKey.slice(-4)}`;
+    }
+
+    function formatElapsedTime(durationMs) {
+      if (!Number.isFinite(durationMs) || durationMs < 0) {
+        return "";
+      }
+
+      if (durationMs < 1000) {
+        return `耗时 ${Math.round(durationMs)} ms`;
+      }
+
+      const seconds = durationMs / 1000;
+      return `耗时 ${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`;
+    }
+
+    function pickFirstNumber(...values) {
+      for (const value of values) {
+        if (Number.isFinite(value)) {
+          return value;
+        }
+      }
+
+      return null;
+    }
+
+    function extractTokenUsage(payload) {
+      const usage = payload?.usage || payload?.token_usage || payload?.data?.usage || null;
+      const inputTokens = pickFirstNumber(
+        usage?.input_tokens,
+        usage?.prompt_tokens,
+        payload?.input_tokens,
+        payload?.prompt_tokens
+      );
+      const outputTokens = pickFirstNumber(
+        usage?.output_tokens,
+        usage?.completion_tokens,
+        payload?.output_tokens,
+        payload?.completion_tokens
+      );
+      let totalTokens = pickFirstNumber(
+        usage?.total_tokens,
+        usage?.total,
+        payload?.total_tokens
+      );
+
+      if (!Number.isFinite(totalTokens) && (Number.isFinite(inputTokens) || Number.isFinite(outputTokens))) {
+        totalTokens = (inputTokens || 0) + (outputTokens || 0);
+      }
+
+      if (!Number.isFinite(totalTokens) && !Number.isFinite(inputTokens) && !Number.isFinite(outputTokens)) {
+        return null;
+      }
+
+      return {
+        totalTokens,
+        inputTokens,
+        outputTokens
+      };
+    }
+
+    function formatModelUsage(tokenUsage) {
+      if (!tokenUsage || !Number.isFinite(tokenUsage.totalTokens)) {
+        return "";
+      }
+
+      return `${tokenUsage.totalTokens} tokens`;
+    }
+
+    function formatTokenUsage(tokenUsage) {
+      if (!tokenUsage) {
+        return "";
+      }
+
+      const details = [];
+      if (Number.isFinite(tokenUsage.inputTokens)) {
+        details.push(`输入 ${tokenUsage.inputTokens}`);
+      }
+      if (Number.isFinite(tokenUsage.outputTokens)) {
+        details.push(`输出 ${tokenUsage.outputTokens}`);
+      }
+
+      if (Number.isFinite(tokenUsage.totalTokens)) {
+        return details.length
+          ? `消耗 ${tokenUsage.totalTokens} tokens (${details.join(" / ")})`
+          : `消耗 ${tokenUsage.totalTokens} tokens`;
+      }
+
+      return details.length ? `Tokens ${details.join(" / ")}` : "";
+    }
+
+    function buildAssistantMeta(durationMs, payload) {
+      const parts = [];
+      const elapsedText = formatElapsedTime(durationMs);
+      const tokenText = formatTokenUsage(extractTokenUsage(payload));
+
+      if (elapsedText) {
+        parts.push(elapsedText);
+      }
+      if (tokenText) {
+        parts.push(tokenText);
+      }
+
+      return parts.join(" · ");
+    }
+
+    function updateModelUsage() {
+      refs.modelUsage.textContent = "";
+      refs.modelUsage.title = "";
+    }
+
+    function setStatus(target, text, tone = "") {
+      target.textContent = text;
+      target.className = tone ? `status ${tone}` : "status";
+    }
+
+    function getStoredApiKey() {
+      try {
+        return sessionStorage.getItem(STORAGE_KEY) || "";
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function storeApiKey(apiKey) {
+      try {
+        sessionStorage.setItem(STORAGE_KEY, apiKey);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function clearStoredApiKey() {
+      try {
+        sessionStorage.removeItem(STORAGE_KEY);
+      } catch (error) {
+      }
+    }
+
+    function getStoredTheme() {
+      try {
+        const value = localStorage.getItem(THEME_STORAGE_KEY) || "";
+        return value === "light" || value === "dark" ? value : "";
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function storeTheme(theme) {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, theme);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function resolveInitialTheme() {
+      const storedTheme = getStoredTheme();
+      if (storedTheme) {
+        return storedTheme;
+      }
+
+      return globalThis.matchMedia?.("(prefers-color-scheme: light)")?.matches ? "light" : "dark";
+    }
+
+    function syncThemeToggle() {
+      const isLight = refs.root.dataset.theme === "light";
+      const label = isLight ? "切换到暗色模式" : "切换到浅色模式";
+      refs.themeToggle.setAttribute("aria-label", label);
+      refs.themeToggle.setAttribute("title", label);
+      refs.themeToggle.setAttribute("aria-pressed", String(isLight));
+    }
+
+    function applyTheme(theme, options = {}) {
+      const { persist = true } = options;
+      const nextTheme = theme === "light" ? "light" : "dark";
+      refs.root.dataset.theme = nextTheme;
+      syncThemeToggle();
+
+      if (persist) {
+        storeTheme(nextTheme);
+      }
+    }
+
+    function toggleTheme() {
+      applyTheme(refs.root.dataset.theme === "light" ? "dark" : "light");
+    }
+
+    function getStoredLastModel() {
+      try {
+        return localStorage.getItem(LAST_MODEL_STORAGE_KEY) || "";
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function storeLastModel(model) {
+      const value = typeof model === "string" ? model.trim() : "";
+      if (!value) {
+        return false;
+      }
+
+      try {
+        localStorage.setItem(LAST_MODEL_STORAGE_KEY, value);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function getPreferredModel(models) {
+      const preferred = getStoredLastModel();
+      if (preferred && models.includes(preferred)) {
+        return preferred;
+      }
+
+      return models[0] || "";
+    }
+
+    function getStoredSessionState() {
+      try {
+        const raw = sessionStorage.getItem(SESSIONS_STORAGE_KEY);
+        if (!raw) {
+          return { sessions: [], currentSessionId: "" };
+        }
+
+        const parsed = JSON.parse(raw);
+        const sessions = Array.isArray(parsed?.sessions)
+          ? parsed.sessions.map(normalizeSession).filter(Boolean)
+          : [];
+        const currentSessionId = typeof parsed?.currentSessionId === "string" ? parsed.currentSessionId : "";
+
+        return { sessions, currentSessionId };
+      } catch (error) {
+        return { sessions: [], currentSessionId: "" };
+      }
+    }
+
+    function storeSessionState() {
+      try {
+        sessionStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify({
+          sessions: state.sessions,
+          currentSessionId: state.currentSessionId
+        }));
+      } catch (error) {
+      }
+    }
+
+    function generateSessionId() {
+      if (globalThis.crypto?.randomUUID) {
+        return globalThis.crypto.randomUUID();
+      }
+
+      return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function generateAttachmentId() {
+      if (globalThis.crypto?.randomUUID) {
+        return globalThis.crypto.randomUUID();
+      }
+
+      return `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function normalizeAttachment(attachment) {
+      if (!attachment || typeof attachment !== "object") {
+        return null;
+      }
+
+      const dataUrl = typeof attachment.dataUrl === "string" ? attachment.dataUrl : "";
+      if (!dataUrl.startsWith("data:image/")) {
+        return null;
+      }
+
+      return {
+        id: typeof attachment.id === "string" && attachment.id ? attachment.id : generateAttachmentId(),
+        name: typeof attachment.name === "string" && attachment.name.trim() ? attachment.name.trim() : "图片",
+        mimeType: typeof attachment.mimeType === "string" && attachment.mimeType ? attachment.mimeType : "image/png",
+        size: Number.isFinite(attachment.size) ? attachment.size : 0,
+        dataUrl
+      };
+    }
+
+    function cloneAttachments(attachments) {
+      return Array.isArray(attachments)
+        ? attachments.map((attachment) => normalizeAttachment(attachment)).filter(Boolean)
+        : [];
+    }
+
+    function normalizeMessage(message) {
+      if (!message || typeof message !== "object") {
+        return null;
+      }
+
+      if (typeof message.role !== "string") {
+        return null;
+      }
+
+      return {
+        role: message.role,
+        content: typeof message.content === "string" ? message.content : "",
+        attachments: cloneAttachments(message.attachments),
+        timestamp: typeof message.timestamp === "string" ? message.timestamp : "",
+        meta: typeof message.meta === "string" ? message.meta : ""
+      };
+    }
+
+    function deriveSessionTitle(conversation) {
+      const firstUserMessage = conversation.find((message) => {
+        return message.role === "user" && (message.content.trim() || message.attachments?.length);
+      });
+      if (!firstUserMessage) {
+        return "新会话";
+      }
+
+      if (!firstUserMessage.content.trim()) {
+        const imageCount = firstUserMessage.attachments?.length || 0;
+        return imageCount > 1 ? `图片消息 (${imageCount})` : "图片消息";
+      }
+
+      const compact = firstUserMessage.content.replace(/\s+/g, " ").trim();
+      return compact.length > 24 ? `${compact.slice(0, 24)}...` : compact;
+    }
+
+    function normalizeSession(session) {
+      if (!session || typeof session !== "object") {
+        return null;
+      }
+
+      const conversation = Array.isArray(session.conversation)
+        ? session.conversation.map(normalizeMessage).filter(Boolean)
+        : [];
+      const createdAt = typeof session.createdAt === "string" && session.createdAt
+        ? session.createdAt
+        : new Date().toISOString();
+      const updatedAt = typeof session.updatedAt === "string" && session.updatedAt
+        ? session.updatedAt
+        : createdAt;
+
+      return {
+        id: typeof session.id === "string" && session.id ? session.id : generateSessionId(),
+        title: typeof session.title === "string" && session.title.trim()
+          ? session.title.trim()
+          : deriveSessionTitle(conversation),
+        createdAt,
+        updatedAt,
+        selectedModel: typeof session.selectedModel === "string" ? session.selectedModel : "",
+        lastTokenUsageText: typeof session.lastTokenUsageText === "string" ? session.lastTokenUsageText : "",
+        customTitle: typeof session.customTitle === "string" ? session.customTitle.trim() : "",
+        instructions: typeof session.instructions === "string" && session.instructions.trim()
+          ? session.instructions
+          : DEFAULT_SYSTEM_PROMPT,
+        conversation
+      };
+    }
+
+    function createSession(options = {}) {
+      const createdAt = options.createdAt || new Date().toISOString();
+      return normalizeSession({
+        id: options.id || generateSessionId(),
+        title: options.title,
+        createdAt,
+        updatedAt: options.updatedAt || createdAt,
+        selectedModel: options.selectedModel || "",
+        lastTokenUsageText: options.lastTokenUsageText || "",
+        customTitle: options.customTitle || "",
+        instructions: options.instructions || DEFAULT_SYSTEM_PROMPT,
+        conversation: Array.isArray(options.conversation) ? options.conversation : []
+      });
+    }
+
+    function formatSessionTime(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return "";
+      }
+
+      return date.toLocaleString([], {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function getSessionTurnLabel(conversation) {
+      if (!conversation.length) {
+        return "空会话";
+      }
+
+      const turns = conversation.filter((message) => message.role === "user").length;
+      return turns ? `${turns} 轮对话` : `${conversation.length} 条消息`;
+    }
+
+    function formatFileSize(size) {
+      if (!Number.isFinite(size) || size <= 0) {
+        return "";
+      }
+
+      if (size < 1024) {
+        return `${size} B`;
+      }
+
+      if (size < 1024 * 1024) {
+        return `${(size / 1024).toFixed(1)} KB`;
+      }
+
+      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function isMobileViewport() {
+      const width = globalThis.innerWidth || 0;
+      const height = globalThis.innerHeight || 0;
+      return Boolean(width && height) && height >= (width * 8) / 9;
+    }
+
+    function syncMessageInputPlaceholder() {
+      const mobilePlaceholder = refs.messageInput.dataset.placeholderMobile || "";
+      const desktopPlaceholder = refs.messageInput.dataset.placeholderDesktop || mobilePlaceholder;
+      refs.messageInput.placeholder = isMobileViewport() ? mobilePlaceholder : desktopPlaceholder;
+    }
+
+    function setSidebarOpen(isOpen) {
+      const nextState = Boolean(isOpen) && isMobileViewport() && !refs.body.classList.contains("locked");
+      refs.body.classList.toggle("sidebar-open", nextState);
+      refs.sidebarToggle.setAttribute("aria-expanded", String(nextState));
+      refs.sidebarToggle.setAttribute("aria-label", nextState ? "关闭侧边栏" : "打开侧边栏");
+    }
+
+    function closeSidebarOnMobile() {
+      if (isMobileViewport()) {
+        setSidebarOpen(false);
+      }
+    }
+
+    function startNewSession() {
+      createNewSession({ focusMessage: true });
+      closeSidebarOnMobile();
+      setStatus(refs.composerStatus, "");
+    }
+
+    function renderComposerAttachments() {
+      refs.composerAttachments.replaceChildren();
+
+      if (!state.pendingAttachments.length) {
+        refs.composerAttachments.hidden = true;
+        return;
+      }
+
+      state.pendingAttachments.forEach((attachment) => {
+        const item = document.createElement("div");
+        item.className = "attachment-chip";
+        item.dataset.attachmentId = attachment.id;
+
+        const preview = document.createElement("img");
+        preview.src = attachment.dataUrl;
+        preview.alt = attachment.name || "待发送图片";
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "button-secondary";
+        remove.dataset.attachmentId = attachment.id;
+        remove.setAttribute("aria-label", `移除 ${attachment.name || "图片"}`);
+        remove.textContent = "×";
+
+        const meta = document.createElement("div");
+        meta.className = "attachment-chip-meta";
+        meta.textContent = attachment.name || formatFileSize(attachment.size) || "图片";
+        meta.title = [attachment.name, formatFileSize(attachment.size)].filter(Boolean).join(" · ");
+
+        item.appendChild(preview);
+        item.appendChild(remove);
+        item.appendChild(meta);
+        refs.composerAttachments.appendChild(item);
+      });
+
+      refs.composerAttachments.hidden = false;
+    }
+
+    function clearPendingAttachments() {
+      state.pendingAttachments = [];
+      refs.imageInput.value = "";
+      renderComposerAttachments();
+    }
+
+    async function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+        reader.onerror = () => reject(new Error(`读取图片失败：${file.name || "未命名图片"}`));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function addAttachmentsFromFiles(files) {
+      if (!state.unlocked || state.busy) {
+        return;
+      }
+
+      const imageFiles = Array.from(files || []).filter((file) => file?.type?.startsWith("image/"));
+      if (!imageFiles.length) {
+        setStatus(refs.composerStatus, "只支持上传图片文件。", "error");
+        return;
+      }
+
+      const remaining = MAX_IMAGE_ATTACHMENTS - state.pendingAttachments.length;
+      if (remaining <= 0) {
+        setStatus(refs.composerStatus, `最多支持 ${MAX_IMAGE_ATTACHMENTS} 张图片。`, "error");
+        return;
+      }
+
+      const selectedFiles = imageFiles.slice(0, remaining);
+
+      try {
+        const attachments = [];
+        for (const file of selectedFiles) {
+          const dataUrl = await readFileAsDataUrl(file);
+          const attachment = normalizeAttachment({
+            id: generateAttachmentId(),
+            name: file.name || "图片",
+            mimeType: file.type || "image/png",
+            size: file.size || 0,
+            dataUrl
+          });
+
+          if (attachment) {
+            attachments.push(attachment);
+          }
+        }
+
+        if (!attachments.length) {
+          setStatus(refs.composerStatus, "没有读取到可用图片。", "error");
+          return;
+        }
+
+        state.pendingAttachments.push(...attachments);
+        renderComposerAttachments();
+        setStatus(refs.composerStatus, `已添加 ${attachments.length} 张图片。`);
+      } catch (error) {
+        setStatus(refs.composerStatus, error.message, "error");
+      }
+    }
+
+    function buildMessageContent(text, attachments = []) {
+      const trimmedText = typeof text === "string" ? text.trim() : "";
+      const content = [];
+
+      if (trimmedText) {
+        content.push({
+          type: "input_text",
+          text: trimmedText
+        });
+      }
+
+      attachments.forEach((attachment) => {
+        if (!attachment?.dataUrl) {
+          return;
+        }
+
+        content.push({
+          type: "input_image",
+          image_url: attachment.dataUrl
+        });
+      });
+
+      if (!content.length) {
+        return "";
+      }
+
+      return content.length === 1 && content[0].type === "input_text" ? content[0].text : content;
+    }
+
+    function setAuthGateVisible(isVisible) {
+      if (isVisible) {
+        setSidebarOpen(false);
+      }
+
+      refs.body.classList.toggle("locked", isVisible);
+      refs.authShell.hidden = !isVisible;
+      refs.authShell.style.display = isVisible ? "grid" : "none";
+      refs.authShell.setAttribute("aria-hidden", String(!isVisible));
+    }
+
+    function setBusy(isBusy) {
+      state.busy = isBusy;
+      refs.unlockButton.disabled = isBusy;
+      refs.sidebarToggle.disabled = !state.unlocked;
+      refs.newSessionButton.disabled = isBusy || !state.unlocked;
+      refs.clearSessionsButton.disabled = isBusy || !state.unlocked;
+      refs.mobileNewSessionButton.disabled = isBusy || !state.unlocked;
+      refs.imageButton.disabled = isBusy || !state.unlocked;
+      refs.imageInput.disabled = isBusy || !state.unlocked;
+      refs.sendButton.disabled = isBusy || !state.unlocked;
+      refs.logoutButton.disabled = isBusy || !state.unlocked;
+      refs.systemPromptInput.disabled = isBusy || !state.unlocked;
+      refs.messageInput.disabled = isBusy || !state.unlocked;
+      syncModelPickerUI();
+      renderSessionList();
+    }
+
+    function updateSessionSummary() {
+      refs.tokenValue.textContent = maskApiKey(state.apiKey);
+    }
+
+    function renderConversationMessages(conversation) {
+      refs.messages.replaceChildren(refs.emptyState);
+      refs.emptyState.style.display = "grid";
+      scheduleCustomScrollbarSync();
+
+      if (!conversation.length) {
+        return;
+      }
+
+      conversation.forEach((message) => {
+        appendMessage(message.role, message.content, {
+          attachments: cloneAttachments(message.attachments),
+          withTimestamp: Boolean(message.timestamp),
+          timestampText: message.timestamp || "",
+          metaText: message.meta || ""
+        });
+      });
+
+      scheduleCustomScrollbarSync();
+    }
+
+    function sortSessionsByUpdated() {
+      state.sessions.sort((left, right) => {
+        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+      });
+    }
+
+    function closeSessionMenu() {
+      if (!state.openSessionMenuId) {
+        return;
+      }
+
+      state.openSessionMenuId = "";
+      renderSessionList();
+    }
+
+    function toggleSessionMenu(sessionId) {
+      state.openSessionMenuId = state.openSessionMenuId === sessionId ? "" : sessionId;
+      renderSessionList();
+    }
+
+    function renderSessionList() {
+      refs.sessionList.replaceChildren();
+
+      if (!state.sessions.length) {
+        refs.sessionList.appendChild(refs.sessionEmpty);
+        scheduleCustomScrollbarSync();
+        return;
+      }
+
+      state.sessions.forEach((session) => {
+        const entry = document.createElement("div");
+        entry.className = state.openSessionMenuId === session.id ? "session-entry is-menu-open" : "session-entry";
+
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = session.id === state.currentSessionId ? "session-item is-active" : "session-item";
+        item.dataset.sessionId = session.id;
+        item.disabled = state.busy;
+
+        const title = document.createElement("div");
+        title.className = "session-title";
+        title.textContent = session.title || "新会话";
+
+        const meta = document.createElement("div");
+        meta.className = "session-meta";
+        meta.textContent = [formatSessionTime(session.updatedAt), getSessionTurnLabel(session.conversation)]
+          .filter(Boolean)
+          .join(" · ");
+
+        item.appendChild(title);
+        item.appendChild(meta);
+
+        const menuWrap = document.createElement("div");
+        menuWrap.className = "session-menu-wrap";
+
+        const menuTrigger = document.createElement("button");
+        menuTrigger.type = "button";
+        menuTrigger.className = "button-secondary session-menu-trigger";
+        menuTrigger.dataset.sessionMenuToggle = "true";
+        menuTrigger.dataset.sessionId = session.id;
+        menuTrigger.disabled = state.busy;
+        menuTrigger.setAttribute("aria-label", `打开 ${session.title || "新会话"} 的会话菜单`);
+        menuTrigger.setAttribute("aria-haspopup", "menu");
+        menuTrigger.setAttribute("aria-expanded", String(state.openSessionMenuId === session.id));
+
+        const dots = document.createElement("span");
+        dots.className = "session-menu-dots";
+        dots.setAttribute("aria-hidden", "true");
+        dots.textContent = "⋯";
+        menuTrigger.appendChild(dots);
+
+        const menu = document.createElement("div");
+        menu.className = "session-menu";
+        menu.setAttribute("role", "menu");
+        menu.hidden = state.openSessionMenuId !== session.id;
+
+        const renameButton = document.createElement("button");
+        renameButton.type = "button";
+        renameButton.dataset.sessionAction = "rename";
+        renameButton.dataset.sessionId = session.id;
+        renameButton.disabled = state.busy;
+        renameButton.textContent = "重命名会话";
+
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "session-menu-danger";
+        deleteButton.dataset.sessionAction = "delete";
+        deleteButton.dataset.sessionId = session.id;
+        deleteButton.disabled = state.busy;
+        deleteButton.textContent = "删除会话";
+
+        menu.appendChild(renameButton);
+        menu.appendChild(deleteButton);
+        menuWrap.appendChild(menuTrigger);
+        menuWrap.appendChild(menu);
+        entry.appendChild(item);
+        entry.appendChild(menuWrap);
+        refs.sessionList.appendChild(entry);
+      });
+
+      scheduleCustomScrollbarSync();
+    }
+
+    function saveCurrentSession(touchUpdated = false) {
+      const currentSession = state.sessions.find((session) => session.id === state.currentSessionId);
+      if (!currentSession) {
+        return;
+      }
+
+      currentSession.conversation = state.conversation.map((message) => ({
+        role: message.role,
+        content: message.content,
+        attachments: cloneAttachments(message.attachments),
+        timestamp: message.timestamp || "",
+        meta: message.meta || ""
+      }));
+      currentSession.selectedModel = state.selectedModel;
+      currentSession.lastTokenUsageText = state.lastTokenUsageText || "";
+      currentSession.instructions = refs.systemPromptInput.value.trim() || DEFAULT_SYSTEM_PROMPT;
+      currentSession.title = currentSession.customTitle || deriveSessionTitle(currentSession.conversation);
+
+      if (touchUpdated) {
+        currentSession.updatedAt = new Date().toISOString();
+        sortSessionsByUpdated();
+      }
+
+      storeSessionState();
+      renderSessionList();
+    }
+
+    function activateSession(sessionId, options = {}) {
+      const { skipSave = false, focusMessage = false } = options;
+      if (!skipSave) {
+        saveCurrentSession(false);
+      }
+
+      const session = state.sessions.find((item) => item.id === sessionId);
+      if (!session) {
+        return;
+      }
+
+      state.currentSessionId = session.id;
+      state.openSessionMenuId = "";
+      state.conversation = session.conversation.map((message) => ({
+        ...message,
+        attachments: cloneAttachments(message.attachments)
+      }));
+      state.lastTokenUsageText = session.lastTokenUsageText || "";
+      refs.systemPromptInput.value = session.instructions || DEFAULT_SYSTEM_PROMPT;
+      refs.messageInput.value = "";
+      syncMessageInputHeight({ collapse: true });
+      clearPendingAttachments();
+
+      if (session.selectedModel && state.models.includes(session.selectedModel)) {
+        state.selectedModel = session.selectedModel;
+      } else {
+        state.selectedModel = getPreferredModel(state.models);
+      }
+      storeLastModel(state.selectedModel);
+
+      renderConversationMessages(state.conversation);
+      syncModelPickerUI();
+      updateModelUsage();
+      renderSessionList();
+      storeSessionState();
+
+      if (focusMessage) {
+        refs.messageInput.focus();
+      }
+    }
+
+    function createNewSession(options = {}) {
+      const { focusMessage = true } = options;
+      state.openSessionMenuId = "";
+      saveCurrentSession(false);
+
+      const session = createSession({
+        selectedModel: state.selectedModel || getPreferredModel(state.models),
+        instructions: refs.systemPromptInput.value.trim() || DEFAULT_SYSTEM_PROMPT,
+        conversation: []
+      });
+
+      state.sessions.unshift(session);
+      state.currentSessionId = session.id;
+      activateSession(session.id, { skipSave: true, focusMessage });
+      storeSessionState();
+    }
+
+    function clearAllSessions() {
+      if (state.busy || !state.unlocked || !state.sessions.length) {
+        return;
+      }
+
+      const shouldClear = globalThis.confirm(`清空全部 ${state.sessions.length} 个会话后将无法恢复，确认清空吗？`);
+      if (!shouldClear) {
+        closeSessionMenu();
+        return;
+      }
+
+      state.openSessionMenuId = "";
+
+      const session = createSession({
+        selectedModel: state.selectedModel || getPreferredModel(state.models),
+        instructions: refs.systemPromptInput.value.trim() || DEFAULT_SYSTEM_PROMPT,
+        conversation: []
+      });
+
+      state.sessions = [session];
+      state.currentSessionId = session.id;
+      activateSession(session.id, { skipSave: true, focusMessage: true });
+      closeSidebarOnMobile();
+      setStatus(refs.composerStatus, "");
+      storeSessionState();
+    }
+
+    function restoreSessionsAfterUnlock() {
+      if (!state.sessions.length) {
+        const session = createSession({
+          selectedModel: getPreferredModel(state.models),
+          instructions: refs.systemPromptInput.value.trim() || DEFAULT_SYSTEM_PROMPT,
+          conversation: []
+        });
+        state.sessions = [session];
+        state.currentSessionId = session.id;
+      } else {
+        sortSessionsByUpdated();
+
+        if (!state.sessions.some((session) => session.id === state.currentSessionId)) {
+          state.currentSessionId = state.sessions[0].id;
+        }
+      }
+
+      activateSession(state.currentSessionId, { skipSave: true, focusMessage: false });
+      saveCurrentSession(false);
+    }
+
+    function renameSession(sessionId) {
+      saveCurrentSession(false);
+
+      const session = state.sessions.find((item) => item.id === sessionId);
+      if (!session) {
+        return;
+      }
+
+      const nextTitle = globalThis.prompt("重命名会话", session.customTitle || session.title || "新会话");
+      if (nextTitle === null) {
+        closeSessionMenu();
+        return;
+      }
+
+      const trimmed = nextTitle.trim();
+      session.customTitle = trimmed;
+      session.title = trimmed || deriveSessionTitle(session.conversation);
+      state.openSessionMenuId = "";
+      storeSessionState();
+      renderSessionList();
+    }
+
+    function deleteSession(sessionId) {
+      saveCurrentSession(false);
+
+      const session = state.sessions.find((item) => item.id === sessionId);
+      if (!session) {
+        return;
+      }
+
+      const label = session.title || "新会话";
+      const shouldDelete = globalThis.confirm(`删除会话“${label}”后将无法恢复，确认删除吗？`);
+      if (!shouldDelete) {
+        closeSessionMenu();
+        return;
+      }
+
+      state.sessions = state.sessions.filter((item) => item.id !== sessionId);
+      state.openSessionMenuId = "";
+
+      if (!state.sessions.length) {
+        const nextSession = createSession({
+          selectedModel: state.selectedModel || getPreferredModel(state.models),
+          instructions: refs.systemPromptInput.value.trim() || DEFAULT_SYSTEM_PROMPT,
+          conversation: []
+        });
+        state.sessions = [nextSession];
+      }
+
+      if (sessionId === state.currentSessionId) {
+        activateSession(state.sessions[0].id, { skipSave: true, focusMessage: false });
+        closeSidebarOnMobile();
+        return;
+      }
+
+      storeSessionState();
+      renderSessionList();
+    }
+
+    function getModelPlaceholder() {
+      if (!state.unlocked) {
+        return "校验 Key 后选择模型";
+      }
+
+      if (!state.models.length) {
+        return "没有可选模型";
+      }
+
+      return "选择模型";
+    }
+
+    function setModelPickerOpen(isOpen) {
+      const hasOptions = !!refs.modelMenu.querySelector(".model-option[data-value]");
+      const nextState = Boolean(isOpen) && hasOptions && !refs.modelTrigger.classList.contains("is-disabled");
+
+      refs.modelPicker.dataset.open = String(nextState);
+      refs.modelMenu.hidden = !nextState;
+      refs.modelTrigger.setAttribute("aria-expanded", String(nextState));
+    }
+
+    function syncModelPickerUI() {
+      const selectedValue = state.selectedModel.trim();
+      refs.modelTriggerValue.textContent = selectedValue || getModelPlaceholder();
+      refs.modelTrigger.classList.toggle("is-placeholder", !selectedValue);
+
+      const shouldDisable = state.busy || !state.unlocked || !state.models.length;
+      refs.modelTrigger.classList.toggle("is-disabled", shouldDisable);
+      refs.modelTrigger.setAttribute("aria-disabled", String(shouldDisable));
+      refs.modelTrigger.tabIndex = shouldDisable ? -1 : 0;
+
+      Array.from(refs.modelMenu.querySelectorAll(".model-option[data-value]")).forEach((option) => {
+        const isSelected = option.dataset.value === selectedValue;
+        option.classList.toggle("is-selected", isSelected);
+        option.setAttribute("aria-selected", String(isSelected));
+      });
+
+      if (shouldDisable) {
+        setModelPickerOpen(false);
+      }
+    }
+
+    function selectModel(value, { closeMenu = true, focusTrigger = false } = {}) {
+      state.selectedModel = typeof value === "string" ? value : "";
+      storeLastModel(state.selectedModel);
+      syncModelPickerUI();
+      saveCurrentSession(false);
+
+      if (closeMenu) {
+        setModelPickerOpen(false);
+      }
+
+      if (focusTrigger) {
+        refs.modelTrigger.focus();
+      }
+    }
+
+    function appendMessage(role, text, options = {}) {
+      const {
+        attachments = [],
+        withTimestamp = true,
+        metaText = "",
+        timestampText = ""
+      } = options;
+      const resolvedTimestamp = withTimestamp ? (timestampText || new Date().toLocaleTimeString()) : "";
+      refs.emptyState.style.display = "none";
+      const item = document.createElement("article");
+      item.className = `message ${role}`;
+
+      const head = document.createElement("div");
+      head.className = "message-head";
+      const roleLabel = document.createElement("span");
+      roleLabel.textContent = role === "user" ? "User" : role === "assistant" ? "Assistant" : "System";
+      head.appendChild(roleLabel);
+
+      if (withTimestamp) {
+        const time = document.createElement("span");
+        time.textContent = resolvedTimestamp;
+        head.appendChild(time);
+      }
+
+      const body = document.createElement("div");
+      body.className = "message-body";
+
+      if (text) {
+        const textBlock = document.createElement("div");
+        textBlock.textContent = text;
+        body.appendChild(textBlock);
+      }
+
+      if (attachments.length) {
+        const imageList = document.createElement("div");
+        imageList.className = "message-images";
+
+        attachments.forEach((attachment) => {
+          const link = document.createElement("a");
+          link.className = "message-image-link";
+          link.href = attachment.dataUrl;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          link.title = attachment.name || "查看图片";
+
+          const image = document.createElement("img");
+          image.className = "message-image";
+          image.src = attachment.dataUrl;
+          image.alt = attachment.name || "聊天图片";
+
+          link.appendChild(image);
+          imageList.appendChild(link);
+        });
+
+        body.appendChild(imageList);
+      }
+
+      item.appendChild(head);
+      item.appendChild(body);
+
+      if (metaText) {
+        const meta = document.createElement("div");
+        meta.className = "message-meta";
+        meta.textContent = metaText;
+        item.appendChild(meta);
+      }
+
+      refs.messages.appendChild(item);
+      refs.messages.scrollTop = refs.messages.scrollHeight;
+      scheduleCustomScrollbarSync();
+      return resolvedTimestamp;
+    }
+
+    function appendLoadingMessage() {
+      const resolvedTimestamp = new Date().toLocaleTimeString();
+      refs.emptyState.style.display = "none";
+
+      const item = document.createElement("article");
+      item.className = "message assistant is-loading";
+
+      const head = document.createElement("div");
+      head.className = "message-head";
+
+      const roleLabel = document.createElement("span");
+      roleLabel.textContent = "Assistant";
+      head.appendChild(roleLabel);
+
+      const time = document.createElement("span");
+      time.textContent = resolvedTimestamp;
+      head.appendChild(time);
+
+      const body = document.createElement("div");
+      body.className = "message-body";
+      const textBlock = document.createElement("div");
+      textBlock.hidden = true;
+
+      const loading = document.createElement("div");
+      loading.className = "loading-dots";
+      loading.setAttribute("role", "status");
+      loading.setAttribute("aria-label", "正在生成回复");
+
+      for (let index = 0; index < 3; index += 1) {
+        const dot = document.createElement("span");
+        dot.className = "loading-dot";
+        dot.setAttribute("aria-hidden", "true");
+        loading.appendChild(dot);
+      }
+
+      body.appendChild(textBlock);
+      body.appendChild(loading);
+      item.appendChild(head);
+      item.appendChild(body);
+
+      let meta = null;
+
+      const syncScroll = () => {
+        refs.messages.scrollTop = refs.messages.scrollHeight;
+        scheduleCustomScrollbarSync();
+      };
+
+      const setText = (text) => {
+        const nextText = typeof text === "string" ? text : "";
+        textBlock.textContent = nextText;
+        textBlock.hidden = !nextText;
+
+        if (nextText) {
+          if (loading.isConnected) {
+            loading.remove();
+          }
+          item.classList.remove("is-loading");
+        } else if (!loading.isConnected) {
+          body.appendChild(loading);
+          item.classList.add("is-loading");
+        }
+
+        syncScroll();
+      };
+
+      const setMeta = (metaText) => {
+        const nextMeta = typeof metaText === "string" ? metaText.trim() : "";
+
+        if (!nextMeta) {
+          if (meta) {
+            meta.remove();
+            meta = null;
+            syncScroll();
+          }
+          return;
+        }
+
+        if (!meta) {
+          meta = document.createElement("div");
+          meta.className = "message-meta";
+          item.appendChild(meta);
+        }
+
+        meta.textContent = nextMeta;
+        syncScroll();
+      };
+
+      refs.messages.appendChild(item);
+      syncScroll();
+
+      return {
+        element: item,
+        timestamp: resolvedTimestamp,
+        getText() {
+          return textBlock.textContent || "";
+        },
+        setText,
+        setMeta,
+        finalize(options = {}) {
+          if (Object.prototype.hasOwnProperty.call(options, "text")) {
+            setText(options.text);
+          } else if (loading.isConnected) {
+            loading.remove();
+            item.classList.remove("is-loading");
+            syncScroll();
+          }
+
+          if (Object.prototype.hasOwnProperty.call(options, "metaText")) {
+            setMeta(options.metaText);
+          }
+        },
+        remove() {
+          item.remove();
+          scheduleCustomScrollbarSync();
+        }
+      };
+    }
+
+    function renderModelOptions(models) {
+      refs.modelMenu.replaceChildren();
+
+      if (!models.length) {
+        state.selectedModel = "";
+        const empty = document.createElement("div");
+        empty.className = "model-option-empty";
+        empty.textContent = getModelPlaceholder();
+        refs.modelMenu.appendChild(empty);
+        syncModelPickerUI();
+        setModelPickerOpen(false);
+        return;
+      }
+
+      models.forEach((model) => {
+        const item = document.createElement("div");
+        item.className = "model-option";
+        item.dataset.value = model;
+        item.setAttribute("role", "option");
+        item.setAttribute("aria-selected", "false");
+        item.tabIndex = 0;
+
+        const main = document.createElement("div");
+        main.className = "model-option-main";
+
+        const label = document.createElement("span");
+        label.className = "model-option-label";
+        label.textContent = model;
+
+        const check = document.createElement("span");
+        check.className = "model-option-check";
+        check.setAttribute("aria-hidden", "true");
+        check.textContent = "✓";
+
+        main.appendChild(label);
+        main.appendChild(check);
+        item.appendChild(main);
+        refs.modelMenu.appendChild(item);
+      });
+
+      if (!models.includes(state.selectedModel)) {
+        state.selectedModel = "";
+      }
+
+      syncModelPickerUI();
+    }
+
+    function buildConversationInput(prompt, attachments = state.pendingAttachments) {
+      const items = state.conversation.map((message) => ({
+        role: message.role,
+        content: buildMessageContent(message.content, cloneAttachments(message.attachments))
+      })).filter((message) => {
+        return Array.isArray(message.content) ? message.content.length > 0 : Boolean(message.content);
+      });
+
+      items.push({
+        role: "user",
+        content: buildMessageContent(prompt, cloneAttachments(attachments))
+      });
+
+      return items;
+    }
+
+    function extractErrorMessage(payload, fallbackMessage = "请求失败") {
+      if (!payload) {
+        return fallbackMessage;
+      }
+
+      return typeof payload?.error?.message === "string"
+        ? payload.error.message
+        : typeof payload?.message === "string"
+          ? payload.message
+          : typeof payload?.raw === "string"
+            ? payload.raw
+            : fallbackMessage;
+    }
+
+    function parseSseEventBlock(block) {
+      const lines = block.replace(/\r/g, "").split("\n");
+      let eventName = "";
+      const dataLines = [];
+
+      lines.forEach((line) => {
+        if (!line || line.startsWith(":")) {
+          return;
+        }
+
+        if (line.startsWith("event:")) {
+          eventName = line.slice(6).trim();
+          return;
+        }
+
+        if (line.startsWith("data:")) {
+          dataLines.push(line.slice(5).trimStart());
+        }
+      });
+
+      return {
+        event: eventName,
+        data: dataLines.join("\n")
+      };
+    }
+
+    function extractStreamTextDelta(payload) {
+      if (!payload) {
+        return "";
+      }
+
+      if (typeof payload.delta === "string") {
+        return payload.delta;
+      }
+
+      if (typeof payload.text === "string" && payload.type === "response.output_text.delta") {
+        return payload.text;
+      }
+
+      const choiceDelta = payload?.choices?.[0]?.delta?.content;
+      if (typeof choiceDelta === "string") {
+        return choiceDelta;
+      }
+
+      if (Array.isArray(choiceDelta)) {
+        return choiceDelta.map((item) => {
+          if (typeof item === "string") {
+            return item;
+          }
+
+          return typeof item?.text === "string" ? item.text : "";
+        }).join("");
+      }
+
+      return "";
+    }
+
+    async function readResponseStream(response, options = {}) {
+      const { onText } = options;
+
+      if (!response.body) {
+        throw new Error("当前响应不支持流式读取。");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let text = "";
+      let completedPayload = null;
+
+      const applyEvent = (eventBlock) => {
+        const parsedEvent = parseSseEventBlock(eventBlock);
+        if (!parsedEvent.data) {
+          return;
+        }
+
+        if (parsedEvent.data === "[DONE]") {
+          return;
+        }
+
+        let payload = null;
+        try {
+          payload = JSON.parse(parsedEvent.data);
+        } catch (error) {
+          return;
+        }
+
+        const eventType = payload?.type || parsedEvent.event || "";
+
+        if (eventType === "error" || eventType === "response.failed") {
+          throw new Error(extractErrorMessage(payload?.response || payload, "流式响应失败。"));
+        }
+
+        const delta = extractStreamTextDelta(payload);
+        if (delta && (!eventType || eventType.includes("delta"))) {
+          text += delta;
+          onText?.(text, payload);
+        }
+
+        if (eventType === "response.output_text.done" && typeof payload.text === "string" && payload.text) {
+          if (payload.text !== text) {
+            text = payload.text;
+            onText?.(text, payload);
+          }
+        }
+
+        if (eventType === "response.completed") {
+          completedPayload = payload?.response || payload?.data || payload;
+          if (!text) {
+            const finalText = extractResponseText(completedPayload);
+            if (finalText) {
+              text = finalText;
+              onText?.(text, payload);
+            }
+          }
+        }
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+        let boundaryMatch = buffer.match(/\r?\n\r?\n/);
+        while (boundaryMatch) {
+          const boundaryIndex = boundaryMatch.index ?? -1;
+          if (boundaryIndex < 0) {
+            break;
+          }
+
+          const block = buffer.slice(0, boundaryIndex);
+          buffer = buffer.slice(boundaryIndex + boundaryMatch[0].length);
+          applyEvent(block);
+          boundaryMatch = buffer.match(/\r?\n\r?\n/);
+        }
+
+        if (done) {
+          const tail = buffer.trim();
+          if (tail) {
+            applyEvent(tail);
+          }
+          break;
+        }
+      }
+
+      return {
+        text,
+        payload: completedPayload
+      };
+    }
+
+    async function readJsonOrThrow(response) {
+      const text = await response.text();
+      let data = null;
+
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (error) {
+          data = { raw: text };
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(extractErrorMessage(data, `HTTP ${response.status}`));
+      }
+
+      return data;
+    }
+
+    function extractModels(payload) {
+      if (!payload) {
+        return [];
+      }
+
+      if (Array.isArray(payload.data)) {
+        return payload.data
+          .map((item) => item?.id || item?.name || item?.model)
+          .filter((item) => typeof item === "string" && item.trim());
+      }
+
+      return [];
+    }
+
+    function extractResponseText(payload) {
+      if (!payload) {
+        return "";
+      }
+
+      if (typeof payload.output_text === "string" && payload.output_text.trim()) {
+        return payload.output_text.trim();
+      }
+
+      const fragments = [];
+      const collectText = (value) => {
+        if (!value) {
+          return;
+        }
+
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (trimmed) {
+            fragments.push(trimmed);
+          }
+          return;
+        }
+
+        if (Array.isArray(value)) {
+          value.forEach(collectText);
+          return;
+        }
+
+        if (typeof value !== "object") {
+          return;
+        }
+
+        if (typeof value.text === "string") {
+          collectText(value.text);
+        }
+
+        if (typeof value.output_text === "string") {
+          collectText(value.output_text);
+        }
+
+        if (typeof value.content === "string") {
+          collectText(value.content);
+        }
+
+        if (Array.isArray(value.content)) {
+          collectText(value.content);
+        }
+      };
+
+      collectText(payload.output);
+      collectText(payload.choices?.[0]?.message?.content);
+      collectText(payload.choices?.[0]?.text);
+
+      return fragments.join("\n\n").trim();
+    }
+
+    async function validateApiKey(apiKey) {
+      const response = await fetch(`${API_BASE}/v1/models`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        },
+        cache: "no-store"
+      });
+
+      return readJsonOrThrow(response);
+    }
+
+    async function unlock() {
+      const apiKey = refs.apiKeyInput.value.trim();
+      if (!apiKey) {
+        setStatus(refs.authStatus, "请先输入 API Key。", "error");
+        return;
+      }
+
+      setBusy(true);
+      setStatus(refs.authStatus, "正在校验 Key 并拉取模型列表...");
+
+      try {
+        const payload = await validateApiKey(apiKey);
+        const models = extractModels(payload);
+        state.apiKey = apiKey;
+        state.models = models;
+        state.unlocked = true;
+        renderModelOptions(models);
+        restoreSessionsAfterUnlock();
+        setStatus(refs.authStatus, "校验成功，正在进入聊天界面...", "success");
+        setAuthGateVisible(false);
+        updateSessionSummary();
+        storeApiKey(apiKey);
+        setStatus(refs.composerStatus, "");
+        refs.messageInput.focus();
+      } catch (error) {
+        state.apiKey = "";
+        state.models = [];
+        state.selectedModel = "";
+        state.lastTokenUsageText = "";
+        state.unlocked = false;
+        renderModelOptions([]);
+        updateModelUsage();
+        updateSessionSummary();
+        setAuthGateVisible(true);
+        setStatus(refs.authStatus, `校验失败：${error.message}`, "error");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function sendMessage() {
+      if (!state.unlocked || state.busy) {
+        return;
+      }
+
+      const model = state.selectedModel.trim();
+      const prompt = refs.messageInput.value.trim();
+      const instructions = refs.systemPromptInput.value.trim();
+      const attachments = cloneAttachments(state.pendingAttachments);
+
+      if (!model) {
+        setStatus(refs.composerStatus, "请先选择模型。", "error");
+        refs.modelTrigger.focus();
+        return;
+      }
+
+      if (!prompt && !attachments.length) {
+        setStatus(refs.composerStatus, "请输入消息或添加图片。", "error");
+        refs.messageInput.focus();
+        return;
+      }
+
+      const payload = {
+        model,
+        input: buildConversationInput(prompt, attachments),
+        stream: true
+      };
+
+      if (instructions) {
+        payload.instructions = instructions;
+      }
+
+      const startedAt = performance.now();
+      const userTimestamp = appendMessage("user", prompt, {
+        attachments
+      });
+      const assistantMessage = appendLoadingMessage();
+      refs.messageInput.value = "";
+      syncMessageInputHeight({ collapse: true });
+      clearPendingAttachments();
+      setBusy(true);
+      updateSessionSummary();
+      setStatus(refs.composerStatus, "");
+
+      try {
+        const response = await fetch(`${API_BASE}/v1/responses`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream, application/json",
+            Authorization: `Bearer ${state.apiKey}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        let data = null;
+        let text = "";
+        const contentType = response.headers.get("content-type") || "";
+        const isEventStream = contentType.includes("text/event-stream");
+
+        if (!response.ok) {
+          if (isEventStream) {
+            try {
+              await readResponseStream(response, {
+                onText(nextText) {
+                  assistantMessage.setText(nextText);
+                }
+              });
+            } catch (error) {
+              throw error;
+            }
+
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          await readJsonOrThrow(response);
+        }
+
+        if (isEventStream) {
+          const streamResult = await readResponseStream(response, {
+            onText(nextText) {
+              assistantMessage.setText(nextText);
+            }
+          });
+
+          data = streamResult.payload;
+          text = streamResult.text;
+        } else {
+          data = await readJsonOrThrow(response);
+          text = extractResponseText(data);
+        }
+
+        if (!text) {
+          throw new Error("响应成功，但没有解析到文本内容。请检查 sub2api 的 response 返回格式。");
+        }
+
+        state.conversation.push({
+          role: "user",
+          content: prompt,
+          attachments,
+          timestamp: userTimestamp,
+          meta: ""
+        });
+        state.lastTokenUsageText = "";
+        updateModelUsage();
+        const assistantMeta = buildAssistantMeta(performance.now() - startedAt, data);
+        assistantMessage.finalize({
+          text,
+          metaText: assistantMeta
+        });
+        state.conversation.push({
+          role: "assistant",
+          content: text,
+          timestamp: assistantMessage.timestamp,
+          meta: assistantMeta
+        });
+        saveCurrentSession(true);
+        updateSessionSummary();
+        setStatus(refs.composerStatus, "");
+      } catch (error) {
+        if (assistantMessage.getText()) {
+          assistantMessage.finalize({
+            metaText: "响应中断"
+          });
+        } else {
+          assistantMessage.remove();
+        }
+        appendMessage("system", `请求失败：${error.message}`);
+        setStatus(refs.composerStatus, `请求失败：${error.message}`, "error");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function logout() {
+      clearStoredApiKey();
+      state.apiKey = "";
+      state.models = [];
+      state.selectedModel = "";
+      state.conversation = [];
+      state.lastTokenUsageText = "";
+      state.unlocked = false;
+      refs.apiKeyInput.value = "";
+      refs.messageInput.value = "";
+      syncMessageInputHeight({ collapse: true });
+      clearPendingAttachments();
+      renderModelOptions([]);
+      updateModelUsage();
+      setAuthGateVisible(true);
+      refs.messages.replaceChildren(refs.emptyState);
+      refs.emptyState.style.display = "grid";
+      setStatus(refs.authStatus, "已退出，请重新输入 API Key。");
+      setStatus(refs.composerStatus, "");
+      updateSessionSummary();
+      setBusy(false);
+      refs.apiKeyInput.focus();
+    }
+
+    refs.unlockButton.addEventListener("click", unlock);
+    refs.sidebarToggle.addEventListener("click", () => {
+      setSidebarOpen(!refs.body.classList.contains("sidebar-open"));
+    });
+    refs.siderBackdrop.addEventListener("click", () => {
+      setSidebarOpen(false);
+    });
+    refs.themeToggle.addEventListener("click", toggleTheme);
+    refs.newSessionButton.addEventListener("click", startNewSession);
+    refs.clearSessionsButton.addEventListener("click", clearAllSessions);
+    refs.mobileNewSessionButton.addEventListener("click", startNewSession);
+    refs.sessionList.addEventListener("click", (event) => {
+      const actionButton = event.target.closest("button[data-session-action][data-session-id]");
+      if (actionButton) {
+        const { sessionAction, sessionId } = actionButton.dataset;
+        if (sessionAction === "rename") {
+          renameSession(sessionId);
+        } else if (sessionAction === "delete") {
+          deleteSession(sessionId);
+        }
+        return;
+      }
+
+      const menuToggle = event.target.closest("button[data-session-menu-toggle][data-session-id]");
+      if (menuToggle) {
+        toggleSessionMenu(menuToggle.dataset.sessionId);
+        return;
+      }
+
+      const sessionItem = event.target.closest(".session-item[data-session-id]");
+      if (!sessionItem || sessionItem.dataset.sessionId === state.currentSessionId) {
+        return;
+      }
+
+      activateSession(sessionItem.dataset.sessionId, { focusMessage: true });
+      closeSidebarOnMobile();
+      setStatus(refs.composerStatus, "");
+    });
+    refs.sendButton.addEventListener("click", sendMessage);
+    refs.imageButton.addEventListener("click", () => {
+      refs.imageInput.click();
+    });
+    refs.imageInput.addEventListener("change", async () => {
+      await addAttachmentsFromFiles(refs.imageInput.files);
+      refs.imageInput.value = "";
+    });
+    refs.composerAttachments.addEventListener("click", (event) => {
+      const removeButton = event.target.closest("button[data-attachment-id]");
+      if (!removeButton) {
+        return;
+      }
+
+      state.pendingAttachments = state.pendingAttachments.filter((attachment) => {
+        return attachment.id !== removeButton.dataset.attachmentId;
+      });
+      renderComposerAttachments();
+      setStatus(refs.composerStatus, "");
+    });
+    refs.logoutButton.addEventListener("click", logout);
+    refs.modelTrigger.addEventListener("click", () => {
+      setModelPickerOpen(refs.modelMenu.hidden);
+    });
+    refs.modelTrigger.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        setModelPickerOpen(refs.modelMenu.hidden);
+      }
+    });
+    refs.modelMenu.addEventListener("click", (event) => {
+      const option = event.target.closest(".model-option[data-value]");
+      if (!option) {
+        return;
+      }
+
+      selectModel(option.dataset.value, { closeMenu: true, focusTrigger: true });
+      setStatus(refs.composerStatus, "");
+    });
+    refs.modelMenu.addEventListener("keydown", (event) => {
+      const option = event.target.closest(".model-option[data-value]");
+      if (!option) {
+        return;
+      }
+
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectModel(option.dataset.value, { closeMenu: true, focusTrigger: true });
+        setStatus(refs.composerStatus, "");
+      }
+    });
+      refs.messageInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+    refs.messageInput.addEventListener("input", () => {
+      syncMessageInputHeight({ collapse: false });
+    });
+    refs.messageInput.addEventListener("focus", () => {
+      syncMessageInputHeight({ collapse: false });
+    });
+    refs.messageInput.addEventListener("blur", () => {
+      syncMessageInputHeight({ collapse: true });
+    });
+    refs.messageInput.addEventListener("paste", async (event) => {
+      const clipboardFiles = Array.from(event.clipboardData?.files || []);
+      const itemFiles = Array.from(event.clipboardData?.items || [])
+        .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+        .map((item) => item.getAsFile())
+        .filter(Boolean);
+      const files = [...clipboardFiles, ...itemFiles].filter((file) => file.type.startsWith("image/"));
+      if (!files.length) {
+        return;
+      }
+
+      await addAttachmentsFromFiles(files);
+    });
+    refs.systemPromptInput.addEventListener("input", () => {
+      saveCurrentSession(false);
+    });
+    refs.apiKeyInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        unlock();
+      }
+    });
+    document.addEventListener("click", (event) => {
+      if (!refs.modelPicker.contains(event.target)) {
+        setModelPickerOpen(false);
+      }
+
+      if (!event.target.closest(".session-menu-wrap")) {
+        closeSessionMenu();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setModelPickerOpen(false);
+        setSidebarOpen(false);
+        closeSessionMenu();
+      }
+    });
+    globalThis.addEventListener("resize", () => {
+      if (!isMobileViewport()) {
+        setSidebarOpen(false);
+      }
+
+      syncMessageInputPlaceholder();
+      syncMessageInputHeight();
+      scheduleCustomScrollbarSync();
+    });
+
+    const cachedApiKey = getStoredApiKey();
+    setupCustomScrollbars();
+    applyTheme(resolveInitialTheme(), { persist: false });
+    syncMessageInputPlaceholder();
+    syncMessageInputHeight({ collapse: true });
+    renderModelOptions([]);
+    renderSessionList();
+    renderConversationMessages([]);
+    updateModelUsage();
+    updateSessionSummary();
+
+    if (cachedApiKey) {
+      refs.apiKeyInput.value = cachedApiKey;
+      state.apiKey = cachedApiKey;
+      updateSessionSummary();
+      setAuthGateVisible(false);
+      unlock();
+    } else {
+      setAuthGateVisible(true);
+    }
+  </script>
+
+  <style>
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --panel: rgba(255, 255, 255, 0.78);
+      --panel-strong: rgba(247, 251, 255, 0.94);
+      --panel-border: rgba(110, 133, 165, 0.18);
+      --text: #162437;
+      --muted: #62748d;
+      --accent: #39b98e;
+      --accent-2: #ea9b3d;
+      --danger: #d65f67;
+      --shadow: none;
+      --scrollbar-track: transparent;
+      --scrollbar-thumb: #1f8d70;
+      --scrollbar-thumb-hover: #1f8d70;
+    }
+
+    :root[data-theme="light"] body {
+      background:
+        radial-gradient(circle at top left, rgba(57, 185, 142, 0.14), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(234, 155, 61, 0.14), transparent 24%),
+        linear-gradient(135deg, #f4f8ff 0%, #ebf3ff 42%, #fdf8f0 100%);
+    }
+
+    :root[data-theme="light"] body::before {
+      background-image:
+        linear-gradient(rgba(93, 118, 152, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(93, 118, 152, 0.06) 1px, transparent 1px);
+      mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.26), transparent 88%);
+    }
+
+    :root[data-theme="light"] input,
+    :root[data-theme="light"] textarea,
+    :root[data-theme="light"] select {
+      border-color: rgba(110, 133, 165, 0.18);
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    :root[data-theme="light"] input:focus,
+    :root[data-theme="light"] textarea:focus,
+    :root[data-theme="light"] select:focus {
+      border-color: rgba(57, 185, 142, 0.56);
+      box-shadow: 0 0 0 4px rgba(57, 185, 142, 0.12);
+    }
+
+    :root[data-theme="light"] button {
+      color: #0d1c18;
+      background: linear-gradient(135deg, var(--accent), #eafff6);
+      box-shadow: 0 14px 30px rgba(57, 185, 142, 0.16);
+    }
+
+    :root[data-theme="light"] button:hover:not(:disabled) {
+      box-shadow: 0 18px 36px rgba(57, 185, 142, 0.2);
+    }
+
+    :root[data-theme="light"] #send-button {
+      color: #ffffff;
+      background: linear-gradient(135deg, #1f8d70, #48b18f);
+      box-shadow: 0 14px 28px rgba(31, 141, 112, 0.18);
+    }
+
+    :root[data-theme="light"] #send-button:hover:not(:disabled) {
+      box-shadow: 0 18px 34px rgba(31, 141, 112, 0.24);
+    }
+
+    :root[data-theme="light"] .app-header {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 248, 255, 0.84)),
+        var(--panel);
+    }
+
+    :root[data-theme="light"] .button-secondary,
+    :root[data-theme="light"] .sidebar-toggle,
+    :root[data-theme="light"] .theme-toggle {
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(231, 238, 248, 0.94));
+      border-color: rgba(110, 133, 165, 0.18);
+      box-shadow: none;
+    }
+
+    :root[data-theme="light"] .header-token,
+    :root[data-theme="light"] .kv-item,
+    :root[data-theme="light"] .session-menu-trigger,
+    :root[data-theme="light"] .attachment-chip,
+    :root[data-theme="light"] .attachment-chip button,
+    :root[data-theme="light"] .message.assistant {
+      border-color: rgba(110, 133, 165, 0.14);
+      background: rgba(255, 255, 255, 0.66);
+    }
+
+    :root[data-theme="light"] .sessions-card,
+    :root[data-theme="light"] .session-list,
+    :root[data-theme="light"] .session-item {
+      background: #ffffff;
+    }
+
+    :root[data-theme="light"] .sessions-card {
+      backdrop-filter: none;
+    }
+
+    :root[data-theme="light"] .session-item {
+      border-color: rgba(110, 133, 165, 0.14);
+      box-shadow: none;
+    }
+
+    :root[data-theme="light"] .session-item:hover:not(:disabled),
+    :root[data-theme="light"] .session-item:focus-visible,
+    :root[data-theme="light"] .session-menu-trigger:hover:not(:disabled),
+    :root[data-theme="light"] .session-menu-trigger:focus-visible,
+    :root[data-theme="light"] .session-menu button:hover:not(:disabled),
+    :root[data-theme="light"] .session-menu button:focus-visible {
+      background: rgba(22, 36, 55, 0.07);
+      box-shadow: none;
+    }
+
+    :root[data-theme="light"] .session-item.is-active {
+      border-color: rgba(57, 185, 142, 0.58);
+      background: rgba(57, 185, 142, 0.14);
+      box-shadow: none;
+    }
+
+    :root[data-theme="light"] .session-menu {
+      border-color: rgba(110, 133, 165, 0.16);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 18px 42px rgba(55, 82, 118, 0.16);
+    }
+
+    :root[data-theme="light"] .session-empty {
+      border-color: rgba(110, 133, 165, 0.18);
+    }
+
+    :root[data-theme="light"] .model-trigger-icon {
+      color: rgba(22, 36, 55, 0.72);
+      background: rgba(22, 36, 55, 0.06);
+      border-color: rgba(110, 133, 165, 0.14);
+    }
+
+    :root[data-theme="light"] .model-menu {
+      border-color: rgba(110, 133, 165, 0.14);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 20px 42px rgba(55, 82, 118, 0.16);
+    }
+
+    :root[data-theme="light"] .model-option {
+      color: #162437;
+    }
+
+    :root[data-theme="light"] .model-option:hover,
+    :root[data-theme="light"] .model-option:focus-visible {
+      background: rgba(22, 36, 55, 0.06);
+    }
+
+    :root[data-theme="light"] .model-option.is-selected {
+      background: rgba(57, 185, 142, 0.12);
+    }
+
+    :root[data-theme="light"] .model-option-check {
+      background: #1c8d6d;
+      color: #ffffff;
+    }
+
+    :root[data-theme="light"] .model-option-empty {
+      color: #62748d;
+    }
+
+    :root[data-theme="light"] .messages {
+      border-color: rgba(110, 133, 165, 0.16);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(243, 248, 255, 0.9));
+    }
+
+    :root[data-theme="light"] .message {
+      border-color: rgba(110, 133, 165, 0.14);
+    }
+
+    :root[data-theme="light"] .message.user {
+      background: linear-gradient(135deg, rgba(57, 185, 142, 0.14), rgba(57, 185, 142, 0.22));
+    }
+
+    :root[data-theme="light"] .message.system {
+      background: rgba(234, 155, 61, 0.12);
+    }
+
+    :root[data-theme="light"] .message-meta {
+      border-top-color: rgba(110, 133, 165, 0.14);
+    }
+
+    :root[data-theme="light"] .loading-dot {
+      background: rgba(22, 36, 55, 0.76);
+    }
+
+    :root[data-theme="light"] .composer {
+      border-color: rgba(110, 133, 165, 0.16);
+      background: rgba(255, 255, 255, 0.76);
+    }
+
+    :root[data-theme="light"] .attachment-chip-meta {
+      background: linear-gradient(180deg, transparent, rgba(244, 248, 255, 0.96));
+      color: rgba(22, 36, 55, 0.82);
+    }
+
+    :root[data-theme="light"] .auth-shell {
+      background: rgba(233, 241, 251, 0.74);
+    }
+
+    :root[data-theme="light"] .auth-card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 248, 255, 0.9));
+    }
+
+    :root[data-theme="light"] .auth-card::before {
+      background: radial-gradient(circle, rgba(57, 185, 142, 0.22), transparent 72%);
+    }
+
+    :root[data-theme="light"] .auth-card::after {
+      background:
+        linear-gradient(135deg, rgba(57, 185, 142, 0.08), transparent 28%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.26), transparent 34%);
+    }
+
+    :root[data-theme="light"] .auth-mark {
+      background: linear-gradient(135deg, #8be1c2, #39b98e);
+      box-shadow: 0 18px 34px rgba(57, 185, 142, 0.2);
+    }
+
+    :root[data-theme="light"] .auth-mark::before {
+      background: transparent;
+      border-color: #103128;
+    }
+
+    :root[data-theme="light"] .auth-mark::after {
+      background: #103128;
+      box-shadow: -7px 10px 0 -1px #103128;
+    }
+
+    :root[data-theme="light"] .auth-field input {
+      border-color: rgba(110, 133, 165, 0.18);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 250, 255, 0.86)),
+        rgba(255, 255, 255, 0.72);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+    }
+
+    :root[data-theme="light"] .auth-field input::placeholder {
+      color: rgba(22, 36, 55, 0.42);
+    }
+
+    :root[data-theme="light"] .auth-actions #unlock-button {
+      color: #ffffff;
+      background: linear-gradient(135deg, #1f8d70, #48b18f);
+      box-shadow: 0 18px 34px rgba(31, 141, 112, 0.2);
+    }
+
+    :root[data-theme="light"] .sider-backdrop {
+      background: rgba(116, 139, 173, 0.2);
+    }
+  </style>
+</body>
+</html>
