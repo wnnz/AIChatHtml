@@ -584,6 +584,7 @@
       gap: 8px;
       align-content: start;
       grid-auto-rows: max-content;
+      min-width: 0;
       min-height: 0;
       max-height: none;
       overflow-y: auto;
@@ -592,6 +593,7 @@
 
     .session-entry {
       position: relative;
+      min-width: 0;
     }
 
     .session-entry.is-menu-open {
@@ -599,7 +601,9 @@
     }
 
     .session-item {
+      display: block;
       width: 100%;
+      min-width: 0;
       padding: 12px 14px;
       padding-right: 56px;
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -608,6 +612,7 @@
       color: var(--text);
       text-align: left;
       box-shadow: none;
+      overflow: hidden;
     }
 
     .session-item:hover:not(:disabled),
@@ -624,6 +629,8 @@
     }
 
     .session-title {
+      max-width: 100%;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -634,6 +641,11 @@
 
     .session-meta {
       margin-top: 6px;
+      max-width: 100%;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: var(--muted);
       font-size: 0.78rem;
       line-height: 1.5;
@@ -680,11 +692,11 @@
       position: absolute;
       top: calc(100% + 8px);
       right: 0;
-      min-width: 148px;
-      padding: 8px;
+      min-width: 172px;
+      padding: 10px;
       display: grid;
-      gap: 4px;
-      border-radius: 14px;
+      gap: 8px;
+      border-radius: 16px;
       border: 1px solid rgba(255, 255, 255, 0.1);
       background: rgba(15, 28, 47, 0.98);
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.34);
@@ -697,13 +709,18 @@
 
     .session-menu button {
       width: 100%;
-      padding: 10px 12px;
-      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
       color: var(--text);
       font-size: 0.88rem;
       font-weight: 700;
       text-align: left;
-      background: transparent;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
       box-shadow: none;
     }
 
@@ -711,12 +728,38 @@
     .session-menu button:focus-visible {
       transform: none;
       box-shadow: none;
-      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(130, 230, 200, 0.16);
+      background: linear-gradient(135deg, rgba(130, 230, 200, 0.14), rgba(255, 255, 255, 0.06));
       outline: none;
+    }
+
+    .session-menu button::after {
+      content: "";
+      width: 8px;
+      height: 8px;
+      flex: none;
+      border-top: 2px solid currentColor;
+      border-right: 2px solid currentColor;
+      opacity: 0.42;
+      transform: rotate(45deg);
     }
 
     .session-menu button.session-menu-danger {
       color: var(--danger);
+      border-color: rgba(255, 141, 144, 0.16);
+      background: linear-gradient(135deg, rgba(255, 141, 144, 0.12), rgba(255, 255, 255, 0.03));
+    }
+
+    .session-menu button.session-menu-danger::after {
+      content: "×";
+      width: auto;
+      height: auto;
+      border: 0;
+      opacity: 0.68;
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1;
+      transform: none;
     }
 
     .session-empty {
@@ -1002,8 +1045,140 @@
       border-radius: 20px;
       border: 1px solid rgba(255, 255, 255, 0.08);
       line-height: 1.74;
+      overflow-wrap: anywhere;
+    }
+
+    .message-content {
+      min-width: 0;
+    }
+
+    .message-text {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
+    }
+
+    .message-markdown {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .message-markdown > :first-child {
+      margin-top: 0;
+    }
+
+    .message-markdown > :last-child {
+      margin-bottom: 0;
+    }
+
+    .message-markdown h1,
+    .message-markdown h2,
+    .message-markdown h3,
+    .message-markdown h4,
+    .message-markdown h5,
+    .message-markdown h6 {
+      margin: 1em 0 0.6em;
+      line-height: 1.28;
+      letter-spacing: -0.02em;
+    }
+
+    .message-markdown h1 {
+      font-size: 1.28rem;
+    }
+
+    .message-markdown h2 {
+      font-size: 1.18rem;
+    }
+
+    .message-markdown h3 {
+      font-size: 1.08rem;
+    }
+
+    .message-markdown p,
+    .message-markdown ul,
+    .message-markdown ol,
+    .message-markdown blockquote,
+    .message-markdown pre,
+    .message-markdown hr,
+    .message-markdown .message-table-wrap {
+      margin: 0.9em 0 0;
+    }
+
+    .message-markdown ul,
+    .message-markdown ol {
+      padding-left: 1.3em;
+    }
+
+    .message-markdown li + li {
+      margin-top: 0.35em;
+    }
+
+    .message-markdown a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(130, 230, 200, 0.32);
+    }
+
+    .message-markdown a:hover {
+      border-bottom-color: rgba(130, 230, 200, 0.58);
+    }
+
+    .message-markdown code {
+      padding: 0.14em 0.42em;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      font-family: var(--font-mono);
+      font-size: 0.92em;
+    }
+
+    .message-markdown pre {
+      overflow-x: auto;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(3, 9, 18, 0.46);
+    }
+
+    .message-markdown pre code {
+      display: block;
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      white-space: pre;
+    }
+
+    .message-markdown blockquote {
+      margin-left: 0;
+      padding-left: 14px;
+      border-left: 3px solid rgba(130, 230, 200, 0.36);
+      color: var(--muted);
+    }
+
+    .message-markdown hr {
+      border: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .message-table-wrap {
+      overflow-x: auto;
+    }
+
+    .message-markdown table {
+      width: max-content;
+      min-width: 100%;
+      border-collapse: collapse;
+    }
+
+    .message-markdown th,
+    .message-markdown td {
+      padding: 8px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .message-markdown th {
+      background: rgba(255, 255, 255, 0.04);
+      font-weight: 700;
     }
 
     .message.user {
@@ -2389,7 +2564,18 @@
 
     function getStoredApiKey() {
       try {
-        return sessionStorage.getItem(STORAGE_KEY) || "";
+        const persistedApiKey = localStorage.getItem(STORAGE_KEY) || "";
+        if (persistedApiKey) {
+          return persistedApiKey;
+        }
+
+        const sessionApiKey = sessionStorage.getItem(STORAGE_KEY) || "";
+        if (sessionApiKey) {
+          localStorage.setItem(STORAGE_KEY, sessionApiKey);
+          sessionStorage.removeItem(STORAGE_KEY);
+        }
+
+        return sessionApiKey;
       } catch (error) {
         return "";
       }
@@ -2397,7 +2583,8 @@
 
     function storeApiKey(apiKey) {
       try {
-        sessionStorage.setItem(STORAGE_KEY, apiKey);
+        localStorage.setItem(STORAGE_KEY, apiKey);
+        sessionStorage.removeItem(STORAGE_KEY);
         return true;
       } catch (error) {
         return false;
@@ -2406,6 +2593,7 @@
 
     function clearStoredApiKey() {
       try {
+        localStorage.removeItem(STORAGE_KEY);
         sessionStorage.removeItem(STORAGE_KEY);
       } catch (error) {
       }
@@ -3250,6 +3438,291 @@
       }
     }
 
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => {
+        switch (char) {
+          case "&":
+            return "&amp;";
+          case "<":
+            return "&lt;";
+          case ">":
+            return "&gt;";
+          case '"':
+            return "&quot;";
+          case "'":
+            return "&#39;";
+          default:
+            return char;
+        }
+      });
+    }
+
+    function escapeAttribute(value) {
+      return escapeHtml(value).replace(/`/g, "&#96;");
+    }
+
+    function normalizeMarkdownUrl(value) {
+      const url = typeof value === "string" ? value.trim() : "";
+      return /^(https?:\/\/|mailto:|tel:|\/|#)/i.test(url) ? url : "";
+    }
+
+    function renderInlineMarkdown(text, options = {}) {
+      const { allowLinks = true } = options;
+      const tokens = [];
+      const storeToken = (html) => {
+        const token = `\u0000${tokens.length}\u0000`;
+        tokens.push(html);
+        return token;
+      };
+
+      let html = escapeHtml(typeof text === "string" ? text : "");
+      html = html.replace(/`([^`\n]+)`/g, (_, code) => {
+        return storeToken(`<code>${code}</code>`);
+      });
+
+      if (allowLinks) {
+        html = html.replace(/\[([^\]\n]+)\]\(([^)\s]+(?:\s+\"[^\"]*\")?)\)/g, (match, label, target) => {
+          const normalizedTarget = normalizeMarkdownUrl(target.replace(/\s+\"[^\"]*\"$/, ""));
+          const renderedLabel = renderInlineMarkdown(label, { allowLinks: false });
+          if (!normalizedTarget) {
+            return renderedLabel;
+          }
+
+          return storeToken(
+            `<a href="${escapeAttribute(normalizedTarget)}" target="_blank" rel="noreferrer">${renderedLabel}</a>`
+          );
+        });
+      }
+
+      html = html.replace(/\*\*([^*\n](?:[\s\S]*?[^*\n])?)\*\*/g, "<strong>$1</strong>");
+      html = html.replace(/__([^_\n](?:[\s\S]*?[^_\n])?)__/g, "<strong>$1</strong>");
+      html = html.replace(/~~([^~\n](?:[\s\S]*?[^~\n])?)~~/g, "<del>$1</del>");
+      html = html.replace(/(^|[^\*])\*([^*\n](?:[\s\S]*?[^*\n])?)\*(?!\*)/g, "$1<em>$2</em>");
+      html = html.replace(/(^|[^_])_([^_\n](?:[\s\S]*?[^_\n])?)_(?!_)/g, "$1<em>$2</em>");
+
+      if (allowLinks) {
+        html = html.replace(/(https?:\/\/[^\s<]+)/g, (match) => {
+          const normalizedTarget = normalizeMarkdownUrl(match);
+          if (!normalizedTarget) {
+            return match;
+          }
+
+          return storeToken(
+            `<a href="${escapeAttribute(normalizedTarget)}" target="_blank" rel="noreferrer">${match}</a>`
+          );
+        });
+      }
+
+      return html.replace(/\u0000(\d+)\u0000/g, (match, index) => {
+        return tokens[Number(index)] || "";
+      });
+    }
+
+    function splitMarkdownTableRow(line) {
+      const trimmed = typeof line === "string" ? line.trim() : "";
+      if (!trimmed || !trimmed.includes("|")) {
+        return [];
+      }
+
+      let row = trimmed;
+      if (row.startsWith("|")) {
+        row = row.slice(1);
+      }
+      if (row.endsWith("|")) {
+        row = row.slice(0, -1);
+      }
+
+      return row.split("|").map((cell) => cell.trim());
+    }
+
+    function isMarkdownTableSeparator(line) {
+      const cells = splitMarkdownTableRow(line);
+      return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, "")));
+    }
+
+    function getMarkdownTableAlignment(cell) {
+      const trimmed = cell.trim();
+      if (/^:-+:$/.test(trimmed)) {
+        return "center";
+      }
+      if (/^-+:$/.test(trimmed)) {
+        return "right";
+      }
+      return "left";
+    }
+
+    function isMarkdownTable(lines, index) {
+      const headerCells = splitMarkdownTableRow(lines[index]);
+      if (headerCells.length < 2) {
+        return false;
+      }
+
+      return isMarkdownTableSeparator(lines[index + 1] || "");
+    }
+
+    function isMarkdownBlockStart(line, nextLine = "") {
+      const trimmed = typeof line === "string" ? line.trim() : "";
+      if (!trimmed) {
+        return false;
+      }
+
+      return trimmed.startsWith("```")
+        || /^#{1,6}\s+/.test(trimmed)
+        || /^>\s?/.test(trimmed)
+        || /^([-*_]\s*){3,}$/.test(trimmed)
+        || /^\s*[-*+]\s+/.test(line)
+        || /^\s*\d+\.\s+/.test(line)
+        || isMarkdownTable([line, nextLine], 0);
+    }
+
+    function renderMarkdown(text) {
+      const source = typeof text === "string" ? text.replace(/\r\n?/g, "\n").trim() : "";
+      if (!source) {
+        return "";
+      }
+
+      const lines = source.split("\n");
+      const html = [];
+      let index = 0;
+
+      while (index < lines.length) {
+        const line = lines[index];
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+          index += 1;
+          continue;
+        }
+
+        if (trimmed.startsWith("```")) {
+          const language = trimmed.slice(3).trim();
+          const codeLines = [];
+          index += 1;
+
+          while (index < lines.length && !lines[index].trim().startsWith("```")) {
+            codeLines.push(lines[index]);
+            index += 1;
+          }
+
+          if (index < lines.length) {
+            index += 1;
+          }
+
+          const languageAttribute = language ? ` data-lang="${escapeAttribute(language)}"` : "";
+          html.push(`<pre><code${languageAttribute}>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+          continue;
+        }
+
+        const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+        if (headingMatch) {
+          const level = headingMatch[1].length;
+          html.push(`<h${level}>${renderInlineMarkdown(headingMatch[2])}</h${level}>`);
+          index += 1;
+          continue;
+        }
+
+        if (/^>\s?/.test(trimmed)) {
+          const quoteLines = [];
+          while (index < lines.length && /^>\s?/.test(lines[index].trim())) {
+            quoteLines.push(lines[index].trim().replace(/^>\s?/, ""));
+            index += 1;
+          }
+
+          html.push(`<blockquote>${renderMarkdown(quoteLines.join("\n"))}</blockquote>`);
+          continue;
+        }
+
+        if (/^([-*_]\s*){3,}$/.test(trimmed)) {
+          html.push("<hr>");
+          index += 1;
+          continue;
+        }
+
+        if (isMarkdownTable(lines, index)) {
+          const headerCells = splitMarkdownTableRow(lines[index]);
+          const alignments = splitMarkdownTableRow(lines[index + 1]).map(getMarkdownTableAlignment);
+          const rows = [];
+          index += 2;
+
+          while (index < lines.length && lines[index].trim() && splitMarkdownTableRow(lines[index]).length > 1) {
+            rows.push(splitMarkdownTableRow(lines[index]));
+            index += 1;
+          }
+
+          const headerHtml = headerCells.map((cell, cellIndex) => {
+            return `<th style="text-align:${alignments[cellIndex] || "left"}">${renderInlineMarkdown(cell)}</th>`;
+          }).join("");
+          const bodyHtml = rows.map((row) => {
+            const cells = headerCells.map((header, cellIndex) => {
+              return `<td style="text-align:${alignments[cellIndex] || "left"}">${renderInlineMarkdown(row[cellIndex] || "")}</td>`;
+            }).join("");
+            return `<tr>${cells}</tr>`;
+          }).join("");
+
+          html.push(
+            `<div class="message-table-wrap"><table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`
+          );
+          continue;
+        }
+
+        if (/^\s*[-*+]\s+/.test(line)) {
+          const items = [];
+          while (index < lines.length && /^\s*[-*+]\s+/.test(lines[index])) {
+            items.push(lines[index].replace(/^\s*[-*+]\s+/, ""));
+            index += 1;
+          }
+
+          html.push(`<ul>${items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</ul>`);
+          continue;
+        }
+
+        if (/^\s*\d+\.\s+/.test(line)) {
+          const items = [];
+          while (index < lines.length && /^\s*\d+\.\s+/.test(lines[index])) {
+            items.push(lines[index].replace(/^\s*\d+\.\s+/, ""));
+            index += 1;
+          }
+
+          html.push(`<ol>${items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</ol>`);
+          continue;
+        }
+
+        const paragraphLines = [];
+        while (index < lines.length && lines[index].trim()) {
+          if (paragraphLines.length && isMarkdownBlockStart(lines[index], lines[index + 1] || "")) {
+            break;
+          }
+
+          paragraphLines.push(lines[index].trimEnd());
+          index += 1;
+        }
+
+        html.push(`<p>${paragraphLines.map((paragraphLine) => renderInlineMarkdown(paragraphLine)).join("<br>")}</p>`);
+      }
+
+      return html.join("");
+    }
+
+    function createMessageTextBlock(role) {
+      const textBlock = document.createElement("div");
+      textBlock.className = role === "assistant"
+        ? "message-content message-markdown"
+        : "message-content message-text";
+      return textBlock;
+    }
+
+    function setMessageTextContent(target, text, role) {
+      const nextText = typeof text === "string" ? text : "";
+      target.dataset.rawText = nextText;
+
+      if (role === "assistant") {
+        target.innerHTML = nextText ? renderMarkdown(nextText) : "";
+        return;
+      }
+
+      target.textContent = nextText;
+    }
+
     function appendMessage(role, text, options = {}) {
       const {
         attachments = [],
@@ -3278,8 +3751,8 @@
       body.className = "message-body";
 
       if (text) {
-        const textBlock = document.createElement("div");
-        textBlock.textContent = text;
+        const textBlock = createMessageTextBlock(role);
+        setMessageTextContent(textBlock, text, role);
         body.appendChild(textBlock);
       }
 
@@ -3343,7 +3816,7 @@
 
       const body = document.createElement("div");
       body.className = "message-body";
-      const textBlock = document.createElement("div");
+      const textBlock = createMessageTextBlock("assistant");
       textBlock.hidden = true;
 
       const loading = document.createElement("div");
@@ -3372,7 +3845,7 @@
 
       const setText = (text) => {
         const nextText = typeof text === "string" ? text : "";
-        textBlock.textContent = nextText;
+        setMessageTextContent(textBlock, nextText, "assistant");
         textBlock.hidden = !nextText;
 
         if (nextText) {
@@ -3417,7 +3890,7 @@
         element: item,
         timestamp: resolvedTimestamp,
         getText() {
-          return textBlock.textContent || "";
+          return textBlock.dataset.rawText || "";
         },
         setText,
         setMeta,
@@ -4267,6 +4740,16 @@
       box-shadow: 0 18px 42px rgba(55, 82, 118, 0.16);
     }
 
+    :root[data-theme="light"] .session-menu button {
+      border-color: rgba(110, 133, 165, 0.14);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(241, 246, 253, 0.92));
+    }
+
+    :root[data-theme="light"] .session-menu button.session-menu-danger {
+      border-color: rgba(214, 95, 103, 0.16);
+      background: linear-gradient(135deg, rgba(214, 95, 103, 0.12), rgba(255, 255, 255, 0.94));
+    }
+
     :root[data-theme="light"] .session-empty {
       border-color: rgba(110, 133, 165, 0.18);
     }
@@ -4324,6 +4807,40 @@
 
     :root[data-theme="light"] .message-meta {
       border-top-color: rgba(110, 133, 165, 0.14);
+    }
+
+    :root[data-theme="light"] .message-markdown a {
+      border-bottom-color: rgba(57, 185, 142, 0.28);
+    }
+
+    :root[data-theme="light"] .message-markdown a:hover {
+      border-bottom-color: rgba(57, 185, 142, 0.46);
+    }
+
+    :root[data-theme="light"] .message-markdown code {
+      background: rgba(22, 36, 55, 0.08);
+    }
+
+    :root[data-theme="light"] .message-markdown pre {
+      border-color: rgba(110, 133, 165, 0.14);
+      background: rgba(244, 248, 255, 0.92);
+    }
+
+    :root[data-theme="light"] .message-markdown blockquote {
+      border-left-color: rgba(57, 185, 142, 0.42);
+    }
+
+    :root[data-theme="light"] .message-markdown hr {
+      border-top-color: rgba(110, 133, 165, 0.18);
+    }
+
+    :root[data-theme="light"] .message-markdown th,
+    :root[data-theme="light"] .message-markdown td {
+      border-color: rgba(110, 133, 165, 0.14);
+    }
+
+    :root[data-theme="light"] .message-markdown th {
+      background: rgba(22, 36, 55, 0.05);
     }
 
     :root[data-theme="light"] .loading-dot {
