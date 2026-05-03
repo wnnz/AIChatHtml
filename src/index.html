@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIChat</title>
+  <script>
+    (() => {
+      try {
+        const theme = localStorage.getItem("sub2api-chat-theme")
+          || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.classList.toggle("dark", theme === "dark");
+      } catch (error) {
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body class="aether-bg">
+  <div id="mobile-sidebar-backdrop" class="fixed inset-0 z-30 hidden bg-slate-900/20 backdrop-blur-sm lg:!hidden" aria-hidden="true"></div>
+
+  <div class="app-frame">
+    <aside id="app-sider" class="left-rail">
+      <div class="flex items-center gap-3 px-1">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <p class="font-display text-2xl font-bold tracking-tight">AIChat</p>
+          <p class="text-xs font-semibold tracking-[0.18em] text-slate-500 dark:text-slate-400">智能工作台</p>
+        </div>
+      </div>
+
+      <div class="mt-10 space-y-3">
+        <button id="new-session-button" class="nav-item bg-white/55 shadow-soft dark:bg-white/10" type="button">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          新建会话
+        </button>
+        <label class="relative block">
+          <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500 dark:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.6-3.6" />
+          </svg>
+          <input id="session-search-input" class="form-input rounded-2xl py-3 pl-12" type="search" placeholder="搜索会话" />
+        </label>
+      </div>
+
+      <section class="mt-8 flex min-h-0 flex-1 flex-col">
+        <div class="mb-3 flex items-center justify-between px-1">
+          <h2 class="text-sm font-semibold text-slate-600 dark:text-slate-300">最近会话</h2>
+          <button id="clear-sessions-button" class="text-button hover:text-rose-500 dark:hover:text-rose-300" type="button">清空</button>
+        </div>
+        <div class="session-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-soft">
+          <div id="session-empty" class="rounded-2xl border border-dashed border-white/55 p-4 text-center text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">暂无历史会话</div>
+          <div id="session-list" class="space-y-2"></div>
+        </div>
+      </section>
+
+      <section class="mt-5 rounded-[1.75rem] bg-white/45 p-4 shadow-soft dark:bg-white/10">
+        <div class="mb-3 flex items-center gap-3">
+          <div class="grid h-11 w-11 place-items-center rounded-full bg-orange-500 font-bold text-white">助</div>
+          <div class="min-w-0">
+            <p class="truncate font-semibold">AI助手</p>
+            <p id="token-value" class="truncate font-mono text-xs text-slate-500 dark:text-slate-400">未验证</p>
+          </div>
+        </div>
+        <textarea id="system-prompt-input" class="form-input min-h-24 resize-none rounded-2xl p-3 text-xs leading-6" placeholder="系统提示词">你是一个准确、直接、简洁的中文助手。</textarea>
+      </section>
+    </aside>
+
+    <main class="main-panel">
+      <header class="flex items-center justify-between gap-3 px-4 py-4 sm:px-7 lg:px-9">
+        <div class="flex min-w-0 items-center gap-3">
+          <button id="sidebar-toggle" class="icon-button lg:hidden" type="button" aria-label="打开侧边栏" aria-controls="app-sider" aria-expanded="false">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
+          <div id="model-picker" class="relative min-w-0">
+            <button id="model-trigger" class="pill-button max-w-[54vw] lg:max-w-md" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="model-menu">
+              <span id="model-trigger-value" class="truncate">正在加载模型...</span>
+              <svg class="h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M3.5 6 8 10.5 12.5 6" />
+              </svg>
+            </button>
+            <div id="model-menu" class="model-menu" role="listbox" hidden></div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div id="model-usage" class="hidden font-mono text-xs text-slate-500 dark:text-slate-400 sm:block"></div>
+          <button id="theme-toggle" class="icon-button" type="button" aria-label="切换主题">
+            <svg class="hidden h-5 w-5 dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M20.2 14.6A8.8 8.8 0 0 1 9.4 3.8a8.8 8.8 0 1 0 10.8 10.8Z" />
+            </svg>
+            <svg class="h-5 w-5 dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="12" cy="12" r="4.25" />
+              <path d="M12 2.75v2.5M12 18.75v2.5M4.93 4.93l1.77 1.77M17.3 17.3l1.77 1.77M2.75 12h2.5M18.75 12h2.5M4.93 19.07l1.77-1.77M17.3 6.7l1.77-1.77" />
+            </svg>
+          </button>
+          <button id="logout-button" class="pill-button hidden sm:inline-flex" type="button">退出</button>
+        </div>
+      </header>
+
+      <section id="messages" class="scrollbar-soft min-h-0 space-y-8 overflow-auto px-4 pb-4 pt-2 sm:space-y-10 sm:px-7 lg:px-20">
+        <div id="empty-state" class="mx-auto grid min-h-full max-w-5xl place-items-center py-12">
+          <div class="w-full text-center">
+            <div class="orb mx-auto animate-float"></div>
+            <h1 class="mt-8 font-display text-4xl font-bold tracking-tight sm:text-5xl">你好</h1>
+            <p class="mt-3 text-xl text-slate-600 dark:text-slate-300">想聊点什么？</p>
+            <div class="mx-auto mt-8 grid max-w-4xl grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <button class="pill-button" data-suggestion="请帮我润色这段文字，让它更清晰自然。" type="button">润色文本</button>
+              <button class="pill-button" data-suggestion="请帮我总结这段文字。" type="button">总结文字</button>
+              <button class="pill-button" data-suggestion="围绕这个产品帮我头脑风暴 10 个点子。" type="button">头脑风暴</button>
+              <button class="pill-button" data-suggestion="请帮我制定一个执行计划。" type="button">制定计划</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <form id="composer" class="composer" onsubmit="return false;">
+        <input id="image-input" type="file" accept="image/*" multiple hidden />
+        <input id="file-input" type="file" accept=".pdf,.txt,.md,.csv,.tsv,.json,.jsonl,.xml,.html,.htm,.doc,.docx,.odt,.rtf,.ppt,.pptx,.odp,.xls,.xlsx,.xla,.xlb,.xlc,.xlm,.xlt,.xlw,.iif,.js,.jsx,.ts,.tsx,.py,.java,.c,.cpp,.cs,.go,.rs,.php,.rb,.swift,.kt,.sql,.sh,.bat,.ps1,.yml,.yaml,.css" multiple hidden />
+        <div id="composer-attachments" class="mb-3 flex flex-wrap gap-3" hidden></div>
+        <div class="flex gap-3">
+          <textarea id="message-input" class="form-input max-h-40 min-h-[4.5rem] flex-1 resize-none rounded-[1.5rem] border-0 bg-transparent px-2 py-2 text-base focus:ring-0" rows="2" aria-label="发送消息" enterkeyhint="enter" placeholder="请输入消息..."></textarea>
+          <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-end">
+            <div id="attachment-picker" class="relative">
+              <button id="image-button" class="icon-button" type="button" aria-label="上传附件" aria-haspopup="menu" aria-expanded="false" aria-controls="attachment-menu">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+              <div id="attachment-menu" class="attachment-menu" role="menu" hidden>
+                <button class="attachment-menu-item" type="button" role="menuitem" data-upload-kind="image">
+                  <span class="attachment-menu-icon">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <rect x="4" y="5" width="16" height="14" rx="3" />
+                      <path d="m8 15 2.5-3 2.2 2.4 1.4-1.5L18 17" />
+                      <circle cx="9" cy="9" r="1.2" />
+                    </svg>
+                  </span>
+                  <span>
+                    <span class="block font-semibold">上传图片</span>
+                    <span class="block text-xs opacity-65">JPG、PNG、WebP 等</span>
+                  </span>
+                </button>
+                <button class="attachment-menu-item" type="button" role="menuitem" data-upload-kind="file">
+                  <span class="attachment-menu-icon">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <path d="M7 3.8h6.5L18 8.3V20H7z" />
+                      <path d="M13.5 3.8V8.3H18" />
+                      <path d="M9.5 13h5M9.5 16h4" />
+                    </svg>
+                  </span>
+                  <span>
+                    <span class="block font-semibold">上传文件</span>
+                    <span class="block text-xs opacity-65">PDF、文档、表格、代码</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+            <button id="send-button" class="icon-button bg-gradient-to-br from-violet-600 to-sky-400 text-white" type="button" aria-label="发送">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <p id="composer-status" class="status mt-2 px-2" aria-live="polite"></p>
+      </form>
+    </main>
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

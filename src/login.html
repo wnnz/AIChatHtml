@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIChat 登录</title>
+  <script>
+    (() => {
+      try {
+        const theme = localStorage.getItem("sub2api-chat-theme")
+          || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.classList.toggle("dark", theme === "dark");
+      } catch (error) {
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body class="aether-bg">
+  <main class="grid min-h-dvh place-items-center px-4 py-8">
+    <section class="shell-panel grid w-full max-w-5xl overflow-hidden rounded-[2rem] lg:grid-cols-[0.95fr_1.05fr]">
+      <div class="relative hidden min-h-[620px] overflow-hidden p-10 lg:block">
+        <div class="absolute -left-12 top-16 h-56 w-56 rounded-full bg-sky-300/40 blur-3xl"></div>
+        <div class="absolute bottom-8 right-4 h-72 w-72 rounded-full bg-lime-200/50 blur-3xl dark:bg-lime-300/20"></div>
+        <div class="relative flex h-full flex-col justify-between rounded-[1.75rem] border border-white/40 bg-white/35 p-8 backdrop-blur-2xl dark:border-white/10 dark:bg-white/5">
+          <div class="flex items-center gap-3">
+            <div class="brand-mark" aria-hidden="true"></div>
+            <div>
+              <p class="font-display text-2xl font-bold tracking-tight">AIChat</p>
+              <p class="text-sm text-slate-600 dark:text-slate-300">柔和轻盈的智能工作台</p>
+            </div>
+          </div>
+          <div class="space-y-8">
+            <div class="orb animate-float"></div>
+            <div>
+              <p class="text-sm font-semibold tracking-[0.24em] text-slate-500 dark:text-slate-300">欢迎回来</p>
+              <h1 class="mt-4 max-w-md font-display text-5xl font-bold leading-tight tracking-tight">AIChat 是一套轻量的多模型聊天工作台。</h1>
+              <p class="mt-5 max-w-md text-base leading-8 text-slate-600 dark:text-slate-300">它基于 OpenAI 兼容接口，支持流式回复、会话管理、图片输入、系统提示词和明暗主题。</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-3 text-sm">
+            <div class="rounded-3xl bg-white/45 p-4 dark:bg-white/10">
+              <p class="text-2xl font-bold">浅色</p>
+              <p class="mt-1 text-slate-500 dark:text-slate-300">浅色模式</p>
+            </div>
+            <div class="rounded-3xl bg-white/45 p-4 dark:bg-white/10">
+              <p class="text-2xl font-bold">暗色</p>
+              <p class="mt-1 text-slate-500 dark:text-slate-300">暗色模式</p>
+            </div>
+            <div class="rounded-3xl bg-white/45 p-4 dark:bg-white/10">
+              <p class="text-2xl font-bold">适配</p>
+              <p class="mt-1 text-slate-500 dark:text-slate-300">响应式</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="relative p-6 sm:p-10 lg:p-12">
+        <div class="mb-10 flex items-center justify-between">
+          <div class="flex items-center gap-3 lg:hidden">
+            <div class="brand-mark" aria-hidden="true"></div>
+            <span class="font-display text-2xl font-bold">AIChat</span>
+          </div>
+          <button id="theme-toggle" class="icon-button ml-auto" type="button" aria-label="切换主题">
+            <svg class="hidden h-5 w-5 dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M20.2 14.6A8.8 8.8 0 0 1 9.4 3.8a8.8 8.8 0 1 0 10.8 10.8Z" />
+            </svg>
+            <svg class="h-5 w-5 dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="12" cy="12" r="4.25" />
+              <path d="M12 2.75v2.5M12 18.75v2.5M4.93 4.93l1.77 1.77M17.3 17.3l1.77 1.77M2.75 12h2.5M18.75 12h2.5M4.93 19.07l1.77-1.77M17.3 6.7l1.77-1.77" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="mx-auto max-w-md">
+          <p class="text-sm font-semibold tracking-[0.24em] text-slate-500 dark:text-slate-300">安全登录</p>
+          <h2 class="mt-4 font-display text-4xl font-bold tracking-tight sm:text-5xl">输入访问密钥</h2>
+          <p class="mt-4 leading-8 text-slate-600 dark:text-slate-300">密钥仅保存在当前浏览器本地，校验通过后会进入主页面。</p>
+
+          <form id="login-form" class="mt-10 space-y-5">
+            <label class="block">
+              <span class="mb-2 block text-sm font-semibold text-slate-600 dark:text-slate-300">访问密钥</span>
+              <input id="api-key-input" class="form-input" type="password" autocomplete="off" spellcheck="false" placeholder="sk-..." aria-label="访问密钥" />
+            </label>
+            <button id="login-button" class="primary-button w-full py-4 text-base" type="submit">登录</button>
+            <p id="auth-status" class="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/login.js"></script>
+</body>
+</html>
