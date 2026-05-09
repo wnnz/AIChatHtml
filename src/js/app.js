@@ -19,6 +19,9 @@ const LAST_MODEL_STORAGE_KEY = "sub2api-chat-last-model";
 const DEFAULT_SYSTEM_PROMPT = "你是一个准确、直接、简洁的中文助手。";
 const MAX_ATTACHMENTS = 8;
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const MAX_AUTO_RETRY_COUNT = 5;
+const AUTO_RETRY_BASE_DELAY_MS = 700;
+const AUTO_RETRY_MAX_DELAY_MS = 3200;
 const SUPPORTED_FILE_EXTENSIONS = new Set([
   "pdf", "txt", "md", "csv", "tsv", "json", "jsonl", "xml", "html", "htm",
   "doc", "docx", "odt", "rtf", "ppt", "pptx", "odp", "xls", "xlsx", "xla", "xlb", "xlc", "xlm", "xlt", "xlw", "iif",
@@ -59,6 +62,8 @@ const refs = {
   modelMenu: document.getElementById("model-menu"),
   modelUsage: document.getElementById("model-usage"),
   systemPromptInput: document.getElementById("system-prompt-input"),
+  messageContextBar: document.getElementById("message-context-bar"),
+  messageContextText: document.getElementById("message-context-bar-text"),
   messages: document.getElementById("messages"),
   emptyState: document.getElementById("empty-state"),
   composer: document.getElementById("composer"),
@@ -83,11 +88,13 @@ const state = {
   conversation: [],
   pendingAttachments: [],
   busy: false,
-  openSessionMenuId: ""
+  openSessionMenuId: "",
+  activeResponseAnchor: null
 };
 
 const customScrollbars = new Map();
 let customScrollbarFrame = 0;
+let messageContextFrame = 0;
 
 applyTheme(resolveInitialTheme(), { persist: false });
 setupThemeToggle(refs.themeToggle);
@@ -176,6 +183,32 @@ function deriveSessionTitle(conversation) {
   }
 
   return firstUserMessage.content.trim().replace(/\s+/g, " ").slice(0, 28);
+}
+
+function buildMessagePreview(text, attachments = []) {
+  const normalizedText = typeof text === "string" ? text.trim().replace(/\s+/g, " ") : "";
+  if (normalizedText) {
+    return normalizedText;
+  }
+
+  const normalizedAttachments = cloneAttachments(attachments);
+  if (!normalizedAttachments.length) {
+    return "空白消息";
+  }
+
+  const imageCount = normalizedAttachments.filter((attachment) => attachment.kind === "image").length;
+  const fileCount = normalizedAttachments.length - imageCount;
+  const parts = [];
+
+  if (imageCount) {
+    parts.push(`${imageCount} 张图片`);
+  }
+
+  if (fileCount) {
+    parts.push(`${fileCount} 个附件`);
+  }
+
+  return parts.join("，");
 }
 
 function normalizeSession(session) {
@@ -269,6 +302,20 @@ function storeLastModel(model) {
     localStorage.setItem(LAST_MODEL_STORAGE_KEY, model);
   } catch (error) {
   }
+}
+
+function wait(durationMs) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, durationMs);
+  });
+}
+
+function getAutoRetryDelayMs(retryCount) {
+  return Math.min(AUTO_RETRY_MAX_DELAY_MS, AUTO_RETRY_BASE_DELAY_MS * retryCount);
+}
+
+function shouldRestoreComposerFocus() {
+  return !window.matchMedia("(max-width: 767px), (pointer: coarse)").matches;
 }
 
 function getPreferredModel(models) {
@@ -459,6 +506,9 @@ function syncBusy() {
   refs.sendButton.disabled = disabled;
   refs.messageInput.disabled = disabled;
   refs.systemPromptInput.disabled = disabled;
+  document.querySelectorAll(".message-retry-button").forEach((button) => {
+    button.disabled = disabled;
+  });
 
   if (disabled) {
     setAttachmentMenuOpen(false);
@@ -685,39 +735,422 @@ function selectModel(model) {
   setModelMenuOpen(false);
 }
 
-function renderMarkdown(text) {
-  const blocks = [];
-  const parts = String(text).split(/```/);
+function renderInlineMarkdown(text) {
+  const replacements = [];
+  const stashHtml = (html) => {
+    const token = `__MARKDOWN_TOKEN_${replacements.length}__`;
+    replacements.push({ token, html });
+    return token;
+  };
 
-  parts.forEach((part, index) => {
-    if (index % 2 === 1) {
-      const code = part.replace(/^\w+\n/, "");
-      blocks.push(`<pre><code>${escapeHtml(code.trim())}</code></pre>`);
-      return;
+  let html = String(text || "")
+    .replace(/`([^`]+)`/g, (_, code) => stashHtml(`<code>${escapeHtml(code)}</code>`))
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, href) => {
+      return stashHtml(`<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`);
+    })
+  html = escapeHtml(html)
+    .replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__([^_]+?)__/g, "<strong>$1</strong>")
+    .replace(/~~([^~]+?)~~/g, "<del>$1</del>")
+    .replace(/(^|[\s(>])\*([^*\n][^*\n]*?)\*(?=[\s).,!?:;]|$)/g, "$1<em>$2</em>")
+    .replace(/(^|[\s(>])_([^_\n][^_\n]*?)_(?=[\s).,!?:;]|$)/g, "$1<em>$2</em>");
+
+  replacements.forEach(({ token, html: tokenHtml }) => {
+    html = html.split(token).join(tokenHtml);
+  });
+
+  return html;
+}
+
+function parseMarkdownFence(line) {
+  const match = String(line || "").match(/^(`{3,}|~{3,})([^\s`~]*)\s*$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    marker: match[1],
+    language: match[2] || ""
+  };
+}
+
+function isMarkdownFence(line) {
+  return Boolean(parseMarkdownFence(line));
+}
+
+function isMarkdownFenceClose(line, openingMarker) {
+  if (!openingMarker) {
+    return false;
+  }
+
+  const closePattern = new RegExp(`^${openingMarker[0]}{${openingMarker.length},}\\s*$`);
+  return closePattern.test(String(line || ""));
+}
+
+function isMarkdownHeading(line) {
+  return /^(#{1,6})\s+/.test(line);
+}
+
+function isMarkdownQuote(line) {
+  return /^>\s?/.test(line);
+}
+
+function isMarkdownUnorderedItem(line) {
+  return /^[-*+]\s+/.test(line.trim());
+}
+
+function isMarkdownOrderedItem(line) {
+  return /^\d+\.\s+/.test(line.trim());
+}
+
+function isMarkdownRule(line) {
+  return /^([-*_])(?:\s*\1){2,}\s*$/.test(line.trim());
+}
+
+function renderMarkdownParagraph(lines) {
+  return `<p>${lines.map((line) => renderInlineMarkdown(line)).join("<br>")}</p>`;
+}
+
+function renderMarkdownList(lines, ordered = false) {
+  const tag = ordered ? "ol" : "ul";
+  const pattern = ordered ? /^\d+\.\s+/ : /^[-*+]\s+/;
+  const items = lines
+    .map((line) => line.trim().replace(pattern, ""))
+    .filter(Boolean)
+    .map((line) => `<li>${renderInlineMarkdown(line)}</li>`)
+    .join("");
+  return `<${tag}>${items}</${tag}>`;
+}
+
+const CODE_LANGUAGE_ALIASES = {
+  js: "javascript",
+  jsx: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  ts: "typescript",
+  tsx: "typescript",
+  py: "python",
+  sh: "bash",
+  shell: "bash",
+  zsh: "bash",
+  yml: "yaml",
+  html: "markup",
+  xml: "markup",
+  svg: "markup",
+  md: "markdown",
+  csharp: "csharp",
+  cs: "csharp"
+};
+
+const COMMON_CODE_KEYWORDS = [
+  "if", "else", "for", "while", "do", "switch", "case", "break", "continue", "return",
+  "try", "catch", "finally", "throw", "new", "class", "extends", "static", "function",
+  "const", "let", "var", "async", "await", "import", "export", "from", "default",
+  "true", "false", "null", "undefined"
+];
+
+const LANGUAGE_CODE_KEYWORDS = {
+  javascript: ["typeof", "instanceof", "delete", "yield"],
+  typescript: ["type", "interface", "implements", "public", "private", "protected", "readonly", "enum", "as"],
+  python: ["def", "elif", "lambda", "pass", "raise", "None", "True", "False", "in", "is", "and", "or", "not", "with", "from", "import", "class", "global", "nonlocal", "assert"],
+  bash: ["then", "fi", "elif", "done", "esac", "function", "local", "export", "readonly", "case", "in"],
+  java: ["package", "public", "private", "protected", "interface", "implements", "throws", "this", "super", "final"],
+  go: ["func", "package", "defer", "go", "select", "chan", "map", "range", "struct", "interface", "fallthrough"],
+  csharp: ["namespace", "using", "public", "private", "protected", "internal", "sealed", "partial", "record", "var", "nameof"],
+  sql: ["select", "from", "where", "join", "left", "right", "inner", "outer", "group", "order", "by", "having", "limit", "insert", "into", "values", "update", "set", "delete", "create", "table", "and", "or", "not", "as", "on", "union", "distinct"],
+  css: ["important", "inherit", "initial", "unset"],
+  json: [],
+  yaml: []
+};
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeCodeLanguage(language) {
+  const normalized = String(language || "").trim().toLowerCase();
+  return CODE_LANGUAGE_ALIASES[normalized] || normalized;
+}
+
+function highlightCodeWithLibrary(code, language = "") {
+  const hljs = window.hljs;
+  if (!hljs?.highlight) {
+    return null;
+  }
+
+  const normalizedLanguage = normalizeCodeLanguage(language);
+
+  try {
+    if (normalizedLanguage && hljs.getLanguage?.(normalizedLanguage)) {
+      const result = hljs.highlight(code, {
+        language: normalizedLanguage,
+        ignoreIllegals: true
+      });
+      return {
+        html: result.value,
+        language: result.language || normalizedLanguage
+      };
     }
 
-    const html = escapeHtml(part)
-      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-      .replace(/`([^`]+)`/g, "<code>$1</code>")
-      .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
-      .split(/\n{2,}/)
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean)
-      .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`)
-      .join("");
-    blocks.push(html);
-  });
+    const result = hljs.highlightAuto(code);
+    return {
+      html: result.value,
+      language: result.language || normalizedLanguage || ""
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildKeywordMatcher(keywords) {
+  if (!keywords.length) {
+    return null;
+  }
+
+  return new RegExp(`^(?:${keywords.map(escapeRegExp).join("|")})\\b`, "i");
+}
+
+function getCodeTokenMatchers(language) {
+  const normalizedLanguage = normalizeCodeLanguage(language);
+  const keywords = [...COMMON_CODE_KEYWORDS, ...(LANGUAGE_CODE_KEYWORDS[normalizedLanguage] || [])];
+  const matchers = [];
+
+  if (["javascript", "typescript", "java", "csharp", "go", "css"].includes(normalizedLanguage)) {
+    matchers.push({ type: "comment", pattern: /^\/\*[\s\S]*?(?:\*\/|$)/ });
+  }
+
+  if (["javascript", "typescript", "java", "csharp", "go"].includes(normalizedLanguage)) {
+    matchers.push({ type: "comment", pattern: /^\/\/.*(?:\n|$)/ });
+  }
+
+  if (["python", "bash", "yaml", "ruby", "markdown"].includes(normalizedLanguage)) {
+    matchers.push({ type: "comment", pattern: /^#.*(?:\n|$)/ });
+  }
+
+  if (normalizedLanguage === "sql") {
+    matchers.push({ type: "comment", pattern: /^--.*(?:\n|$)/ });
+  }
+
+  if (normalizedLanguage === "markup") {
+    matchers.push(
+      { type: "comment", pattern: /^<!--[\s\S]*?(?:-->|$)/ },
+      { type: "tag", pattern: /^<\/?[A-Za-z][A-Za-z0-9:-]*/ },
+      { type: "attr", pattern: /^[A-Za-z_:][A-Za-z0-9:._-]*(?=\=)/ }
+    );
+  }
+
+  if (normalizedLanguage === "css") {
+    matchers.push(
+      { type: "decorator", pattern: /^@[A-Za-z-]+/ },
+      { type: "property", pattern: /^[A-Za-z-]+(?=\s*:)/ }
+    );
+  }
+
+  if (["json", "yaml"].includes(normalizedLanguage)) {
+    matchers.push({ type: "property", pattern: /^"(?:\\.|[^"\\])*"(?=\s*:)/ });
+  }
+
+  matchers.push(
+    { type: "decorator", pattern: /^@[A-Za-z_][\w.]*/ },
+    { type: "property", pattern: /^[A-Za-z_$][\w$-]*(?=\s*:)/ },
+    { type: "variable", pattern: /^\$[{(]?[A-Za-z_][\w]*[})]?/ },
+    { type: "string", pattern: /^`(?:\\.|[^`\\])*`?/ },
+    { type: "string", pattern: /^"(?:\\.|[^"\\])*"?/ },
+    { type: "string", pattern: /^'(?:\\.|[^'\\])*'?/ },
+    { type: "number", pattern: /^-?(?:0x[\da-f]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?)/i }
+  );
+
+  const keywordMatcher = buildKeywordMatcher(keywords);
+  if (keywordMatcher) {
+    matchers.push({ type: "keyword", pattern: keywordMatcher });
+  }
+
+  matchers.push(
+    { type: "function", pattern: /^[A-Za-z_$][\w$]*(?=\()/ },
+    { type: "tag", pattern: /^<\/?|^\/>|^>/ },
+    { type: "operator", pattern: /^(?:===|!==|==|!=|<=|>=|=>|&&|\|\||\+\+|--|[-+*/%<>!=&|^~?:]+)/ }
+  );
+
+  return matchers;
+}
+
+function highlightCodeSyntax(code, language = "") {
+  const source = String(code || "");
+  if (!source) {
+    return "";
+  }
+
+  const matchers = getCodeTokenMatchers(language);
+  let index = 0;
+  let html = "";
+
+  while (index < source.length) {
+    const segment = source.slice(index);
+    let matchedToken = null;
+
+    for (const matcher of matchers) {
+      const match = segment.match(matcher.pattern);
+      if (match?.[0]) {
+        matchedToken = {
+          type: matcher.type,
+          value: match[0]
+        };
+        break;
+      }
+    }
+
+    if (!matchedToken) {
+      html += escapeHtml(source[index]);
+      index += 1;
+      continue;
+    }
+
+    html += `<span class="token-${matchedToken.type}">${escapeHtml(matchedToken.value)}</span>`;
+    index += matchedToken.value.length;
+  }
+
+  return html;
+}
+
+function renderMarkdownCodeBlock(lines, language = "") {
+  const code = lines.join("\n").replace(/\n$/, "");
+  const highlighted = highlightCodeWithLibrary(code, language);
+  const resolvedLanguage = highlighted?.language || normalizeCodeLanguage(language);
+  const classes = ["hljs"];
+
+  if (resolvedLanguage) {
+    classes.push(`language-${escapeHtml(resolvedLanguage)}`);
+  }
+
+  const html = highlighted?.html || highlightCodeSyntax(code, language);
+  return `<pre><code class="${classes.join(" ")}">${html}</code></pre>`;
+}
+
+function renderMarkdown(text) {
+  const source = String(text || "").replace(/\r\n?/g, "\n");
+  if (!source.trim()) {
+    return "";
+  }
+
+  const lines = source.split("\n");
+  const blocks = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    const fenceMatch = parseMarkdownFence(line);
+    if (fenceMatch) {
+      index += 1;
+      const codeLines = [];
+      while (index < lines.length && !isMarkdownFenceClose(lines[index], fenceMatch.marker)) {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+      if (index < lines.length) {
+        index += 1;
+      }
+      blocks.push(renderMarkdownCodeBlock(codeLines, fenceMatch.language));
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      blocks.push(`<h${level}>${renderInlineMarkdown(headingMatch[2].trim())}</h${level}>`);
+      index += 1;
+      continue;
+    }
+
+    if (isMarkdownRule(line)) {
+      blocks.push("<hr>");
+      index += 1;
+      continue;
+    }
+
+    if (isMarkdownQuote(line)) {
+      const quoteLines = [];
+      while (index < lines.length && isMarkdownQuote(lines[index])) {
+        quoteLines.push(lines[index].replace(/^>\s?/, ""));
+        index += 1;
+      }
+      blocks.push(`<blockquote>${renderMarkdownParagraph(quoteLines)}</blockquote>`);
+      continue;
+    }
+
+    if (isMarkdownUnorderedItem(line)) {
+      const listLines = [];
+      while (index < lines.length && isMarkdownUnorderedItem(lines[index])) {
+        listLines.push(lines[index]);
+        index += 1;
+      }
+      blocks.push(renderMarkdownList(listLines, false));
+      continue;
+    }
+
+    if (isMarkdownOrderedItem(line)) {
+      const listLines = [];
+      while (index < lines.length && isMarkdownOrderedItem(lines[index])) {
+        listLines.push(lines[index]);
+        index += 1;
+      }
+      blocks.push(renderMarkdownList(listLines, true));
+      continue;
+    }
+
+    const paragraphLines = [];
+    while (index < lines.length) {
+      const currentLine = lines[index];
+      if (!currentLine.trim()) {
+        break;
+      }
+      if (
+        isMarkdownFence(currentLine)
+        || isMarkdownHeading(currentLine)
+        || isMarkdownQuote(currentLine)
+        || isMarkdownUnorderedItem(currentLine)
+        || isMarkdownOrderedItem(currentLine)
+        || isMarkdownRule(currentLine)
+      ) {
+        break;
+      }
+      paragraphLines.push(currentLine);
+      index += 1;
+    }
+    if (!paragraphLines.length) {
+      blocks.push(renderMarkdownParagraph([line]));
+      index += 1;
+      continue;
+    }
+
+    blocks.push(renderMarkdownParagraph(paragraphLines));
+  }
 
   return blocks.join("");
 }
 
-function setMessageContent(target, text, role) {
+function setMessageContent(target, text, role, options = {}) {
   const value = typeof text === "string" ? text : "";
+  const { renderAsMarkdown = role !== "system", isStreaming = false } = options;
   target.dataset.rawText = value;
 
-  if (role === "assistant") {
-    target.innerHTML = value ? renderMarkdown(value) : "";
-    setupCustomScrollbars(target);
+  if (role !== "system") {
+    target.classList.toggle("is-streaming", isStreaming);
+
+    if (renderAsMarkdown) {
+      target.innerHTML = value ? renderMarkdown(value) : "";
+      setupCustomScrollbars(target);
+    } else {
+      target.textContent = value;
+      scheduleCustomScrollbarRefresh();
+    }
+
     return;
   }
 
@@ -730,8 +1163,171 @@ function isNearMessageBottom(offset = 96) {
 }
 
 function scrollMessagesToBottom() {
-  refs.messages.scrollTop = refs.messages.scrollHeight;
+  const nextScrollTop = Math.max(0, refs.messages.scrollHeight - refs.messages.clientHeight);
+  if (state.activeResponseAnchor) {
+    state.activeResponseAnchor.pendingScrollTop = nextScrollTop;
+  }
+
+  refs.messages.scrollTop = nextScrollTop;
   scheduleCustomScrollbarRefresh();
+  scheduleMessageContextBarUpdate();
+}
+
+function scrollMessageToTop(messageItem, offset = 12) {
+  if (!messageItem?.isConnected) {
+    return;
+  }
+
+  const maxScrollTop = Math.max(0, refs.messages.scrollHeight - refs.messages.clientHeight);
+  const nextScrollTop = Math.min(maxScrollTop, Math.max(0, messageItem.offsetTop - offset));
+  if (state.activeResponseAnchor) {
+    state.activeResponseAnchor.pendingScrollTop = nextScrollTop;
+  }
+
+  refs.messages.scrollTop = nextScrollTop;
+  scheduleCustomScrollbarRefresh();
+  scheduleMessageContextBarUpdate();
+}
+
+function jumpToMessageItem(messageItem, offset = 12) {
+  if (!messageItem?.isConnected) {
+    return;
+  }
+
+  messageItem.scrollIntoView({ block: "start", inline: "nearest" });
+  const nextScrollTop = Math.max(0, refs.messages.scrollTop - offset);
+  if (state.activeResponseAnchor) {
+    state.activeResponseAnchor.pendingScrollTop = nextScrollTop;
+  }
+
+  refs.messages.scrollTop = nextScrollTop;
+  scheduleCustomScrollbarRefresh();
+  scheduleMessageContextBarUpdate();
+}
+
+function reinforceActiveResponseAnchor(userItem) {
+  if (state.activeResponseAnchor?.userItem !== userItem) {
+    return;
+  }
+
+  const currentAnchor = state.activeResponseAnchor;
+  currentAnchor.ignoreUserScrollUntil = performance.now() + 500;
+  scrollMessageToTop(userItem);
+
+  window.setTimeout(() => {
+    if (state.activeResponseAnchor?.userItem === userItem && !state.activeResponseAnchor.userScrolled) {
+      scrollMessageToTop(userItem);
+    }
+  }, 60);
+
+  window.setTimeout(() => {
+    if (state.activeResponseAnchor?.userItem === userItem && !state.activeResponseAnchor.userScrolled) {
+      scrollMessageToTop(userItem);
+    }
+  }, 180);
+}
+
+function findMessageItemById(messageId) {
+  if (!messageId) {
+    return null;
+  }
+
+  return Array.from(refs.messages.querySelectorAll(".message[data-message-id]"))
+    .find((item) => item.dataset.messageId === messageId) || null;
+}
+
+function getTopAssistantMessage() {
+  const thresholdTop = refs.messages.getBoundingClientRect().top + 8;
+  const assistantItems = refs.messages.querySelectorAll(".message.assistant[data-user-message-id]");
+
+  for (const item of assistantItems) {
+    if (item.getBoundingClientRect().bottom > thresholdTop) {
+      return item;
+    }
+  }
+
+  return state.activeResponseAnchor?.assistantItem?.isConnected ? state.activeResponseAnchor.assistantItem : null;
+}
+
+function isMessageItemVisible(messageItem, threshold = 12) {
+  if (!messageItem?.isConnected) {
+    return false;
+  }
+
+  const containerRect = refs.messages.getBoundingClientRect();
+  const messageRect = messageItem.getBoundingClientRect();
+  return messageRect.bottom > containerRect.top + threshold && messageRect.top < containerRect.bottom - threshold;
+}
+
+function updateMessageContextBar() {
+  const assistantItem = getTopAssistantMessage();
+  const preview = assistantItem?.dataset.userMessagePreview || "";
+  const messageId = assistantItem?.dataset.userMessageId || "";
+  const userItem = findMessageItemById(messageId);
+
+  if (!preview || !messageId || !userItem || isMessageItemVisible(userItem)) {
+    refs.messageContextBar.hidden = true;
+    refs.messageContextBar.dataset.userMessageId = "";
+    refs.messageContextText.textContent = "";
+    return;
+  }
+
+  refs.messageContextBar.hidden = false;
+  refs.messageContextBar.dataset.userMessageId = messageId;
+  refs.messageContextText.textContent = preview;
+}
+
+function scheduleMessageContextBarUpdate() {
+  if (messageContextFrame) {
+    return;
+  }
+
+  messageContextFrame = requestAnimationFrame(() => {
+    messageContextFrame = 0;
+    updateMessageContextBar();
+  });
+}
+
+function syncActiveResponseAnchor() {
+  const currentAnchor = state.activeResponseAnchor;
+  if (!currentAnchor || currentAnchor.userScrolled) {
+    return;
+  }
+
+  scrollMessageToTop(currentAnchor.userItem);
+}
+
+function clearActiveResponseAnchor() {
+  const currentAnchor = state.activeResponseAnchor;
+  if (!currentAnchor) {
+    return;
+  }
+
+  currentAnchor.userItem?.classList.remove("is-stream-anchor");
+  currentAnchor.assistantItem?.classList.remove("is-stream-response");
+  refs.messages.classList.remove("has-stream-anchor");
+  state.activeResponseAnchor = null;
+  scheduleCustomScrollbarRefresh();
+  scheduleMessageContextBarUpdate();
+}
+
+function activateResponseAnchor(userItem, assistantItem) {
+  clearActiveResponseAnchor();
+  if (!userItem?.isConnected || !assistantItem?.isConnected) {
+    return;
+  }
+
+  userItem.classList.add("is-stream-anchor");
+  assistantItem.classList.add("is-stream-response");
+  refs.messages.classList.add("has-stream-anchor");
+  state.activeResponseAnchor = {
+    userItem,
+    assistantItem,
+    userScrolled: false,
+    pendingScrollTop: null,
+    ignoreUserScrollUntil: 0
+  };
+  scrollMessageToTop(userItem);
 }
 
 function appendMessage(role, text, options = {}) {
@@ -739,13 +1335,28 @@ function appendMessage(role, text, options = {}) {
     attachments = [],
     timestampText = new Date().toLocaleTimeString(),
     metaText = "",
-    forceScroll = false
+    forceScroll = false,
+    allowAutoScroll = true,
+    messageId = generateId("message"),
+    linkedUserMessageId = "",
+    linkedUserMessagePreview = ""
   } = options;
 
-  const shouldAutoScroll = forceScroll || isNearMessageBottom();
+  const shouldAutoScroll = forceScroll || (allowAutoScroll && isNearMessageBottom());
   refs.emptyState.hidden = true;
   const item = document.createElement("article");
   item.className = `message ${role}`;
+  item.dataset.messageId = messageId;
+  item.dataset.role = role;
+
+  if (role === "user") {
+    item.dataset.messagePreview = buildMessagePreview(text, attachments);
+  }
+
+  if (role === "assistant" && linkedUserMessageId) {
+    item.dataset.userMessageId = linkedUserMessageId;
+    item.dataset.userMessagePreview = linkedUserMessagePreview;
+  }
 
   const head = document.createElement("div");
   head.className = "message-head";
@@ -753,7 +1364,7 @@ function appendMessage(role, text, options = {}) {
 
   const body = document.createElement("div");
   const content = document.createElement("div");
-  content.className = role === "assistant" ? "message-markdown" : "whitespace-pre-wrap break-words leading-8";
+  content.className = role === "system" ? "whitespace-pre-wrap break-words leading-8" : "message-markdown";
   setMessageContent(content, text, role);
   body.append(content);
 
@@ -805,95 +1416,258 @@ function appendMessage(role, text, options = {}) {
     scrollMessagesToBottom();
   }
 
-  return timestampText;
+  return {
+    item,
+    timestamp: timestampText,
+    id: messageId,
+    preview: item.dataset.messagePreview || linkedUserMessagePreview || ""
+  };
 }
 
-function appendLoadingMessage() {
-  const shouldAutoScroll = isNearMessageBottom();
+function appendLoadingMessage(options = {}) {
+  const {
+    linkedUserMessageId = "",
+    linkedUserMessagePreview = ""
+  } = options;
   refs.emptyState.hidden = true;
   const timestamp = new Date().toLocaleTimeString();
   const item = document.createElement("article");
   item.className = "message assistant";
+  item.dataset.messageId = generateId("message");
+  item.dataset.role = "assistant";
+
+  if (linkedUserMessageId) {
+    item.dataset.userMessageId = linkedUserMessageId;
+    item.dataset.userMessagePreview = linkedUserMessagePreview;
+  }
+
   item.innerHTML = `
     <div class="message-head"><span>助手</span><span>${escapeHtml(timestamp)}</span></div>
     <div class="message-markdown" hidden></div>
-    <div class="flex items-center gap-2" aria-label="正在生成回复">
+    <div class="message-inline-status" hidden></div>
+    <div class="message-loading" aria-live="polite">
       <span class="h-2 w-2 animate-pulse-dot rounded-full bg-sky-500"></span>
       <span class="h-2 w-2 animate-pulse-dot rounded-full bg-violet-500 [animation-delay:120ms]"></span>
       <span class="h-2 w-2 animate-pulse-dot rounded-full bg-cyan-500 [animation-delay:240ms]"></span>
+      <span class="message-loading-label">正在生成回复...</span>
     </div>
   `;
 
   const content = item.querySelector(".message-markdown");
-  const loading = item.querySelector("[aria-label]");
+  const status = item.querySelector(".message-inline-status");
+  const loading = item.querySelector(".message-loading");
+  const loadingLabel = item.querySelector(".message-loading-label");
   let meta = null;
+  let pendingText = "";
+  let renderedText = "";
+  let renderedMode = "streaming-markdown";
+  let pendingFrame = 0;
+
+  const getRenderMode = (renderAsMarkdown, isStreaming) => {
+    if (!renderAsMarkdown) {
+      return "plain";
+    }
+
+    return isStreaming ? "streaming-markdown" : "markdown";
+  };
+
+  const syncMeta = (nextMeta = "") => {
+    if (!nextMeta) {
+      if (meta) {
+        meta.textContent = "";
+        meta.hidden = true;
+      }
+      return;
+    }
+
+    if (!meta) {
+      meta = document.createElement("div");
+      meta.className = "message-meta";
+      item.append(meta);
+    }
+
+    meta.hidden = false;
+    meta.textContent = nextMeta;
+  };
+
+  const clearStatus = () => {
+    status.hidden = true;
+    status.className = "message-inline-status";
+    status.textContent = "";
+    status.innerHTML = "";
+  };
+
+  const syncText = (nextText, options = {}) => {
+    const { renderAsMarkdown = true, isStreaming = false } = options;
+    renderedText = nextText;
+    renderedMode = getRenderMode(renderAsMarkdown, isStreaming);
+    setMessageContent(content, nextText, "assistant", { renderAsMarkdown, isStreaming });
+    content.hidden = !nextText;
+    loading.hidden = Boolean(nextText);
+    syncActiveResponseAnchor();
+  };
+
+  const flushQueuedText = () => {
+    pendingFrame = 0;
+    if (renderedText === pendingText && renderedMode === "streaming-markdown") {
+      return;
+    }
+
+    syncText(pendingText, { renderAsMarkdown: true, isStreaming: true });
+  };
+
+  const commitText = (nextText, options = {}) => {
+    const { renderAsMarkdown = true, isStreaming = false } = options;
+    pendingText = typeof nextText === "string" ? nextText : "";
+    if (pendingFrame) {
+      cancelAnimationFrame(pendingFrame);
+      pendingFrame = 0;
+    }
+
+    const nextMode = getRenderMode(renderAsMarkdown, isStreaming);
+    if (renderedText === pendingText && content.hidden === !pendingText && renderedMode === nextMode) {
+      return;
+    }
+
+    syncText(pendingText, { renderAsMarkdown, isStreaming });
+  };
+
+  const setLoadingState = (label = "正在生成回复...") => {
+    clearStatus();
+    syncMeta("");
+    loading.hidden = false;
+    loadingLabel.textContent = label;
+
+    if (!renderedText) {
+      content.hidden = true;
+    }
+
+    scheduleCustomScrollbarRefresh();
+    syncActiveResponseAnchor();
+  };
+
+  const showRetryState = ({ message = "请求失败", onRetry } = {}) => {
+    if (pendingFrame) {
+      cancelAnimationFrame(pendingFrame);
+      pendingFrame = 0;
+    }
+
+    loading.hidden = true;
+    syncMeta("");
+    status.hidden = false;
+    status.className = "message-inline-status is-error";
+    status.innerHTML = "";
+
+    const copy = document.createElement("span");
+    copy.className = "message-inline-copy";
+    copy.textContent = message;
+    status.append(copy);
+
+    if (typeof onRetry === "function") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "message-retry-button";
+      button.setAttribute("aria-label", "重试生成回复");
+      button.setAttribute("title", "重试");
+      button.disabled = state.busy;
+      button.innerHTML = `
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M20 11a8 8 0 1 0 2.1 5.4" />
+          <path d="M20 4v7h-7" />
+        </svg>
+      `;
+      button.addEventListener("click", () => {
+        if (state.busy) {
+          return;
+        }
+
+        onRetry();
+      });
+      status.append(button);
+    }
+
+    scheduleCustomScrollbarRefresh();
+  };
+
   refs.messages.append(item);
   setupCustomScrollbars(item);
-
-  if (shouldAutoScroll) {
-    scrollMessagesToBottom();
-  }
+  scheduleMessageContextBarUpdate();
 
   return {
+    element: item,
     timestamp,
     getText() {
-      return content.dataset.rawText || "";
+      return pendingText || content.dataset.rawText || "";
     },
     setText(nextText) {
-      const shouldAutoScroll = isNearMessageBottom();
-      setMessageContent(content, nextText, "assistant");
-      content.hidden = !nextText;
-
-      if (nextText && loading?.isConnected) {
-        loading.remove();
+      pendingText = typeof nextText === "string" ? nextText : "";
+      if (pendingFrame) {
+        return;
       }
 
-      if (shouldAutoScroll) {
-        scrollMessagesToBottom();
-      }
+      pendingFrame = requestAnimationFrame(flushQueuedText);
+    },
+    beginRequest(label = "正在生成回复...") {
+      commitText("", { renderAsMarkdown: true, isStreaming: true });
+      setLoadingState(label);
     },
     finalize(options = {}) {
-      const shouldAutoScroll = isNearMessageBottom();
       if (Object.prototype.hasOwnProperty.call(options, "text")) {
-        this.setText(options.text);
+        commitText(options.text, { renderAsMarkdown: true, isStreaming: false });
+      } else {
+        commitText(pendingText, { renderAsMarkdown: true, isStreaming: false });
       }
 
-      if (loading?.isConnected) {
-        loading.remove();
-      }
-
-      const nextMeta = options.metaText || "";
-      if (nextMeta) {
-        meta = document.createElement("div");
-        meta.className = "message-meta";
-        meta.textContent = nextMeta;
-        item.append(meta);
-      }
-
-      if (shouldAutoScroll) {
-        scrollMessagesToBottom();
-      }
+      loading.hidden = true;
+      clearStatus();
+      syncMeta(options.metaText || "");
+      syncActiveResponseAnchor();
+      clearActiveResponseAnchor();
+    },
+    showRetry(options = {}) {
+      showRetryState(options);
     },
     remove() {
+      if (pendingFrame) {
+        cancelAnimationFrame(pendingFrame);
+      }
+
+      if (state.activeResponseAnchor?.assistantItem === item || state.activeResponseAnchor?.userItem === item) {
+        clearActiveResponseAnchor();
+      }
+
       item.remove();
     }
   };
 }
 
 function renderConversation() {
+  clearActiveResponseAnchor();
   refs.messages.innerHTML = "";
   refs.messages.append(refs.emptyState);
   refs.emptyState.hidden = state.conversation.length > 0;
 
+  let lastUserMessageLink = null;
+
   state.conversation.forEach((message) => {
-    appendMessage(message.role, message.content, {
+    const appendedMessage = appendMessage(message.role, message.content, {
       attachments: cloneAttachments(message.attachments),
       timestampText: message.timestamp || new Date().toLocaleTimeString(),
-      metaText: message.meta || ""
+      metaText: message.meta || "",
+      linkedUserMessageId: message.role === "assistant" ? lastUserMessageLink?.id || "" : "",
+      linkedUserMessagePreview: message.role === "assistant" ? lastUserMessageLink?.preview || "" : ""
     });
+
+    if (message.role === "user") {
+      lastUserMessageLink = {
+        id: appendedMessage.id,
+        preview: appendedMessage.preview
+      };
+    }
   });
 
   setupCustomScrollbars(refs.messages);
+  scheduleMessageContextBarUpdate();
 }
 
 function formatFileSize(size) {
@@ -1087,7 +1861,7 @@ function parseSseEventBlock(block) {
     }
 
     if (line.startsWith("data:")) {
-      dataLines.push(line.slice(5).trimStart());
+      dataLines.push(line.slice(5).replace(/^\s?/, ""));
     }
   });
 
@@ -1097,6 +1871,22 @@ function parseSseEventBlock(block) {
 function extractStreamTextDelta(payload) {
   if (typeof payload?.delta === "string") {
     return payload.delta;
+  }
+
+  if (typeof payload?.delta?.text === "string") {
+    return payload.delta.text;
+  }
+
+  if (Array.isArray(payload?.delta)) {
+    return payload.delta
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+
+        return item?.text || item?.delta || "";
+      })
+      .join("");
   }
 
   if (typeof payload?.text === "string" && payload.type === "response.output_text.delta") {
@@ -1253,6 +2043,123 @@ function formatElapsedTime(durationMs) {
   return durationMs < 1000 ? `${Math.round(durationMs)} 毫秒` : `${(durationMs / 1000).toFixed(1)} 秒`;
 }
 
+async function performResponseRequest(payload, assistantMessage) {
+  const response = await fetch(`${API_BASE}/v1/responses`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream, application/json",
+      Authorization: `Bearer ${state.apiKey}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const contentType = response.headers.get("content-type") || "";
+  const isEventStream = contentType.includes("text/event-stream");
+  let data = null;
+  let text = "";
+  let firstTextAt = null;
+
+  if (!response.ok && !isEventStream) {
+    await readJsonOrThrow(response);
+  }
+
+  if (isEventStream) {
+    const streamResult = await readResponseStream(response, {
+      onText(nextText) {
+        if (!firstTextAt && nextText) {
+          firstTextAt = performance.now();
+        }
+        assistantMessage.setText(nextText);
+      }
+    });
+    data = streamResult.payload;
+    text = streamResult.text;
+  } else {
+    data = await readJsonOrThrow(response);
+    text = extractResponseText(data);
+    if (text) {
+      firstTextAt = performance.now();
+    }
+  }
+
+  if (!text) {
+    throw new Error("响应成功，但没有解析到文本内容。");
+  }
+
+  return { data, text, firstTextAt };
+}
+
+async function runRequestWithRetries(requestContext, assistantMessage) {
+  if (state.busy) {
+    return;
+  }
+
+  state.busy = true;
+  syncBusy();
+  setStatus(refs.composerStatus, "");
+  assistantMessage.beginRequest();
+  const startedAt = performance.now();
+
+  try {
+    let lastError = null;
+
+    for (let retryCount = 0; retryCount <= MAX_AUTO_RETRY_COUNT; retryCount += 1) {
+      try {
+        const { data, text, firstTextAt } = await performResponseRequest(requestContext.payload, assistantMessage);
+        const assistantMeta = [
+          firstTextAt ? `首字 ${formatElapsedTime(firstTextAt - startedAt)}` : "",
+          `总耗时 ${formatElapsedTime(performance.now() - startedAt)}`,
+          extractTokenUsage(data)
+        ].filter(Boolean).join(" · ");
+
+        assistantMessage.finalize({ text, metaText: assistantMeta });
+        state.conversation.push({
+          role: "user",
+          content: requestContext.prompt,
+          attachments: cloneAttachments(requestContext.attachments),
+          timestamp: requestContext.userTimestamp,
+          meta: ""
+        });
+        state.conversation.push({
+          role: "assistant",
+          content: text,
+          attachments: [],
+          timestamp: assistantMessage.timestamp,
+          meta: assistantMeta
+        });
+        saveCurrentSession(true);
+        setStatus(refs.composerStatus, "");
+        return;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error("请求失败");
+        if (retryCount === MAX_AUTO_RETRY_COUNT) {
+          assistantMessage.showRetry({
+            message: `请求失败：${lastError.message}`,
+            onRetry: () => {
+              void runRequestWithRetries(requestContext, assistantMessage);
+            }
+          });
+          setStatus(refs.composerStatus, `请求失败：${lastError.message}`, "error");
+          return;
+        }
+
+        const retryIndex = retryCount + 1;
+        const retryText = `请求失败，正在重试 (${retryIndex}/${MAX_AUTO_RETRY_COUNT})...`;
+        assistantMessage.beginRequest(retryText);
+        setStatus(refs.composerStatus, retryText);
+        await wait(getAutoRetryDelayMs(retryIndex));
+      }
+    }
+  } finally {
+    state.busy = false;
+    syncBusy();
+    if (shouldRestoreComposerFocus()) {
+      refs.messageInput.focus();
+    }
+  }
+}
+
 async function sendMessage() {
   if (state.busy) {
     return;
@@ -1284,83 +2191,27 @@ async function sendMessage() {
     payload.instructions = instructions;
   }
 
-  const startedAt = performance.now();
-  const userTimestamp = appendMessage("user", prompt, { attachments, forceScroll: true });
-  const assistantMessage = appendLoadingMessage();
+  const userMessage = appendMessage("user", prompt, {
+    attachments,
+    allowAutoScroll: false
+  });
+  const assistantMessage = appendLoadingMessage({
+    linkedUserMessageId: userMessage.id,
+    linkedUserMessagePreview: userMessage.preview
+  });
+  activateResponseAnchor(userMessage.item, assistantMessage.element);
+  const requestContext = {
+    model,
+    prompt,
+    attachments: cloneAttachments(attachments),
+    instructions,
+    payload,
+    userTimestamp: userMessage.timestamp
+  };
+
   refs.messageInput.value = "";
   clearPendingAttachments();
-  state.busy = true;
-  syncBusy();
-  setStatus(refs.composerStatus, "");
-
-  try {
-    const response = await fetch(`${API_BASE}/v1/responses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream, application/json",
-        Authorization: `Bearer ${state.apiKey}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const contentType = response.headers.get("content-type") || "";
-    const isEventStream = contentType.includes("text/event-stream");
-    let data = null;
-    let text = "";
-
-    if (!response.ok && !isEventStream) {
-      await readJsonOrThrow(response);
-    }
-
-    if (isEventStream) {
-      const streamResult = await readResponseStream(response, {
-        onText(nextText) {
-          assistantMessage.setText(nextText);
-        }
-      });
-      data = streamResult.payload;
-      text = streamResult.text;
-    } else {
-      data = await readJsonOrThrow(response);
-      text = extractResponseText(data);
-    }
-
-    if (!text) {
-      throw new Error("响应成功，但没有解析到文本内容。");
-    }
-
-    state.conversation.push({
-      role: "user",
-      content: prompt,
-      attachments,
-      timestamp: userTimestamp,
-      meta: ""
-    });
-
-    const assistantMeta = [formatElapsedTime(performance.now() - startedAt), extractTokenUsage(data)].filter(Boolean).join(" · ");
-    assistantMessage.finalize({ text, metaText: assistantMeta });
-    state.conversation.push({
-      role: "assistant",
-      content: text,
-      attachments: [],
-      timestamp: assistantMessage.timestamp,
-      meta: assistantMeta
-    });
-    saveCurrentSession(true);
-  } catch (error) {
-    if (assistantMessage.getText()) {
-      assistantMessage.finalize({ metaText: "响应中断" });
-    } else {
-      assistantMessage.remove();
-    }
-    appendMessage("system", `请求失败：${error.message}`);
-    setStatus(refs.composerStatus, `请求失败：${error.message}`, "error");
-  } finally {
-    state.busy = false;
-    syncBusy();
-    refs.messageInput.focus();
-  }
+  await runRequestWithRetries(requestContext, assistantMessage);
 }
 
 async function bootstrap() {
@@ -1472,6 +2323,54 @@ document.addEventListener("keydown", (event) => {
 });
 
 refs.systemPromptInput.addEventListener("input", () => saveCurrentSession(false));
+refs.messages.addEventListener("scroll", () => {
+  const currentAnchor = state.activeResponseAnchor;
+  if (!currentAnchor) {
+    scheduleMessageContextBarUpdate();
+    return;
+  }
+
+  if (currentAnchor.ignoreUserScrollUntil > performance.now()) {
+    scheduleMessageContextBarUpdate();
+    return;
+  }
+
+  if (
+    Number.isFinite(currentAnchor.pendingScrollTop) &&
+    Math.abs(refs.messages.scrollTop - currentAnchor.pendingScrollTop) <= 1
+  ) {
+    currentAnchor.pendingScrollTop = null;
+    scheduleMessageContextBarUpdate();
+    return;
+  }
+
+  currentAnchor.pendingScrollTop = null;
+  currentAnchor.userScrolled = true;
+  scheduleMessageContextBarUpdate();
+});
+function jumpToCurrentContextMessage() {
+  const messageId = refs.messageContextBar.dataset.userMessageId || "";
+  const messageItem = findMessageItemById(messageId);
+  if (!messageItem) {
+    return;
+  }
+
+  if (state.activeResponseAnchor?.userItem === messageItem) {
+    state.activeResponseAnchor.userScrolled = false;
+    reinforceActiveResponseAnchor(messageItem);
+    return;
+  }
+
+  jumpToMessageItem(messageItem);
+}
+
+refs.messageContextBar.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+});
+refs.messageContextBar.addEventListener("click", () => {
+  jumpToCurrentContextMessage();
+});
+window.addEventListener("resize", scheduleMessageContextBarUpdate);
 refs.messageInput.addEventListener("keydown", (event) => {
   if (shouldSendOnEnter(event)) {
     event.preventDefault();

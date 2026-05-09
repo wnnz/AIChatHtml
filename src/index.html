@@ -103,6 +103,11 @@
         </div>
       </header>
 
+      <button id="message-context-bar" class="message-context-bar" type="button" hidden>
+        <span class="message-context-bar-label">关联提问</span>
+        <span id="message-context-bar-text" class="message-context-bar-text"></span>
+      </button>
+
       <section id="messages" class="scrollbar-soft min-h-0 space-y-8 overflow-auto px-4 pb-4 pt-2 sm:space-y-10 sm:px-7 lg:px-20">
         <div id="empty-state" class="mx-auto grid min-h-full max-w-5xl place-items-center py-12">
           <div class="w-full text-center">
@@ -123,8 +128,8 @@
         <input id="image-input" type="file" accept="image/*" multiple hidden />
         <input id="file-input" type="file" accept=".pdf,.txt,.md,.csv,.tsv,.json,.jsonl,.xml,.html,.htm,.doc,.docx,.odt,.rtf,.ppt,.pptx,.odp,.xls,.xlsx,.xla,.xlb,.xlc,.xlm,.xlt,.xlw,.iif,.js,.jsx,.ts,.tsx,.py,.java,.c,.cpp,.cs,.go,.rs,.php,.rb,.swift,.kt,.sql,.sh,.bat,.ps1,.yml,.yaml,.css" multiple hidden />
         <div id="composer-attachments" class="mb-3 flex flex-wrap gap-3" hidden></div>
-        <div class="flex gap-3">
-          <textarea id="message-input" class="form-input max-h-40 min-h-[4.5rem] flex-1 resize-none rounded-[1.5rem] border-0 bg-transparent px-2 py-2 text-base focus:ring-0" rows="2" aria-label="发送消息" enterkeyhint="enter" placeholder="请输入消息..."></textarea>
+        <div class="flex min-w-0 gap-3">
+          <textarea id="message-input" class="form-input max-h-40 min-h-[4.5rem] min-w-0 flex-1 resize-none rounded-[1.5rem] border-0 bg-transparent px-2 py-2 text-base focus:ring-0" rows="2" aria-label="发送消息" enterkeyhint="enter" placeholder="请输入消息..."></textarea>
           <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-end">
             <div id="attachment-picker" class="relative">
               <button id="image-button" class="icon-button" type="button" aria-label="上传附件" aria-haspopup="menu" aria-expanded="false" aria-controls="attachment-menu">
